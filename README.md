@@ -1,6 +1,9 @@
 [![Build Status](https://travis-ci.org/ubolonton/js-csp.svg?branch=master)](https://travis-ci.org/ubolonton/js-csp)
 
-# js-csp
+# core-async
+
+This project is a fork of [js-csp](https://github.com/ubolonton/js-csp) that is exploring a different API. This is currently performed by wrapping the js-csp exports in another API. This approach allows this method to keep the actual implemenation code in sync with the js-csp project as much as possible.
+
 Communicating sequential processes for Javascript (like Clojurescript core.async, or Go).
 
 ## Examples ##
