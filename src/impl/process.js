@@ -4,7 +4,7 @@ var dispatch = require("./dispatch");
 var select = require("./select");
 var Channel = require("./channels").Channel;
 
-var NO_VALUE = {};
+var NO_VALUE = null;
 
 var FnHandler = function(f) {
   this.f = f;
