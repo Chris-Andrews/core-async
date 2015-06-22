@@ -7,61 +7,116 @@ var Channel = function(bufferOrN, transducer, exceptionHandler) {
     var buffer = (isFinite(bufferOrN) ? bufferOrN : bufferOrN._buffer);
   }
 
-  // var chan = csp.chan(buffer, transducer, exceptionHandler);
-  this._chan = csp.chan(buffer, transducer, exceptionHandler);
+  /*
+  "chan" is the true channel of this object, however, we won't act on it
+  directly because this channel implementation will have a mult by default.
 
-  this._consumer = undefined;
+  These channels can operate in linear fashion (single puts and takes), or with
+  one or more consumers (taps, pipes, pipelines, etc). Standard takes and
+  asyncTakes can only be performed if there are no consumers of a channel.
+  Otherwise, takes succeed only when all consumers are able to take from a mult
+  channel.
 
-  this.put = value => {csp.put(this._chan, value);};
-  this.asyncPut = (value, callback) => {csp.putAsync(this._chan, value);};
-  this.asyncPutCollection = () => {
-    // use iterable interface to put values
+  This will add some overhead to performance, but will be useful for exploring
+  this API. If the performance of simpler channels is needed in the future, the
+  implementations could be divided into separate classes, e.g. Channel and
+  MultChannel. One consideration of doing this is that the current
+  implementation allows us to pipe to a channel and later pipe to another. This
+  is accomplished due to the untapall function of the mult.
+
+  */
+  var chan = csp.chan(buffer, transducer, exceptionHandler);
+  this._chan = csp.chan();
+  this._mix = csp.operations.mix(this._chan);
+  this._mult = csp.operations.mult(chan);
+
+  this.mult = {
+    tap: () => {},
+    untap: () => {},
+    untapall: () => {
+      //untapall
+      //tap this._chan;
+    },
+    pipe = (dest, keepOpen) => {};
+    pipeline = (dest, xf, keepOpen) => {
+      // ch = csp.chan(xf);
+      // this.mult.tap(ch);
+      // best way to send all the values?
+    };
+    pipelineAsync = (n, dest, af, keepOpen) => {};
+    split = () => {};
+    hasConsumer = false;
   };
-  this.take = () => csp.take(this._chan);
-  this.asyncTake = callback => csp.takeAsync(this._chan, callback);
+  this.mult.tap(this._chan);
+
+  this.mix = {
+    add: () => {/*check hasConsumer ... or is mult?*/},
+    remove: () => {},
+    mute: (...ch) => {},
+    unmute: (...ch) => {},
+    pause: (...ch) => {},
+    unpause: (...ch) => {},
+    focus: (...ch) => {},
+    unfocus: (...ch) => {},
+    setFocusMode: (mode) => {
+      switch mode {
+        case: 'mute'
+          break;
+        case: 'pause'
+          break;
+        default:
+          throw new Error('Unrecognized focus mode: ' + mode);
+      }
+    },
+  };
+
+  this.asyncPut = (value, callback) => csp.putAsync(chan, value, callback);
+  this.asyncPutIterable = (collection, callback) => {
+    collection.forEach(item => csp.putAsync(chan, item, callback));
+  };
+  this.asyncTake = callback => {
+    // check for consumer
+    csp.takeAsync(chan, callback)
+  }
+
+  this.offer = (value) => csp.offer(chan,value);
+  this.poll = () => {
+    // check for consumer
+    csp.poll(chan);
+  }
+  this.flush = () => {
+    let discard = csp.poll(chan);
+    while (discard !== null) {
+      discard = csp.poll(chan);
+    }
+  };
+
+  this.put = value => {csp.put(chan, value);};
+  this.take = () => {
+    // check for consumer
+    csp.take(chan)
+  }
 
 
   // reduced and into functionality
   // use a side-effect causing reducing function?
   // map(x => {array.push(x); console.log(x)}) // x is defined in outer scope
 
-  // Destination property?
-  // If pipe is called with a pipe already active, what happens?
-  // Want to avoid unpredictable takes caused by multiple pipe calls
-  // Relevant methods include:
-  /*
-    - pipe
-    - pipeline
-    - pipelineAsync
-    - split
-    - merge
-    - mult
-    - pub
-    - mix?
-
-    Solution could be to allow these methods only if there
-    consumer is undefined
-  */
-
-  this.pipe = (dest, keepOpen) => {};
-  this.pipeline = (dest, xf, keepOpen) => {};
-  this.pipelineAsync = (n, dest, af, keepOpen) => {};
-
-  this.split = () => {};
-  this.merge = () => {
-    // call consumer on both channels
-  };
-
-  this.mult = () => {};
-
-  this.pub = () => {};
+  // pub-sub can be re-created from mult+transducers
+  // this.pub = () => {};
   // this.sub = () => {};
-  // publication has subscribe method
+  // publication has subscribe method?
 
-  this.mix = () => {};
+  // Merging is relatively simple using mix(ers)
+  // this.merge = () => {
+  //   // call consumer on both channels
+  // };
+
+
+
 
   this.close = () => chan.close();
-  this.checkOpen = () => !this._chan.closed;
+  this.checkOpen = () => !chan.closed;
 
 };
 
@@ -77,12 +132,12 @@ var Buffer = function(type, size) {
     case 'sliding':
       buffer = csp.buffers.sliding(size);
       break;
-    case 'promise':
-      if (size) {
-        throw new Error('Promise buffer does not accept a size parameter');
-      }
-      buffer = csp.buffers.promise();
-      break;
+    // case 'promise':
+    //   if (size) {
+    //     throw new Error('Promise buffer does not accept a size parameter');
+    //   }
+    //   buffer = csp.buffers.promise();
+    //   break;
     default:
       throw new Error('Unknown buffer type: ' + type);
   }
