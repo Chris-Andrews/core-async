@@ -42,6 +42,8 @@ var Channel = function(bufferOrN, transducer, exceptionHandler) {
       // ch = csp.chan(xf);
       // this.mult.tap(ch);
       // best way to send all the values?
+      // use pipe
+      // add ch to this.mult._taps so that it can be closed
     };
     pipelineAsync = (n, dest, af, keepOpen) => {};
     split = () => {};
