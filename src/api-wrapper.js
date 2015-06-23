@@ -42,6 +42,11 @@ class Chan extends ChannelBase {
     super(bufferOrN, transducer, exceptionHandler);
   }
   take () {}
+  /*
+  Note can modify process.js run method to add additional check for
+  instanceof APIChannel that will allow 'yield chan' or 'yield timeout'
+  to be implicit takes.
+  */
   takeAsync () {}
   poll () {}
   flush () {
