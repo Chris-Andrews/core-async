@@ -46,6 +46,11 @@ class Chan extends ChannelBase {
   Note can modify process.js run method to add additional check for
   instanceof APIChannel that will allow 'yield chan' or 'yield timeout'
   to be implicit takes.
+
+  A check that will work for Chan and timeout is:
+  else if(ins._chan instanceof Channel) {}
+     note a problem with this approach is that we could wait on a Mult
+     when we should not be doing so
   */
   takeAsync () {}
   poll () {}
