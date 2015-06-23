@@ -26,13 +26,15 @@ class Buffer {
 
 class ChannelBase {
   constructor(bufferOrN, transducer, exceptionHandler) {
-    //_chan
+    //this._chan = csp.chan();
+    //this.mix = new Mix(this._chan);
   }
   put () {}
-  asyncPut () {}
-  asyncPutIterable () {}
+  putAsync () {} // putAsync?
+  onto (iterableCollection) {} // returns a channel that closes on completion
   offer () {}
   checkOpen () {}
+  close() {}
 }
 
 class Chan extends ChannelBase {
@@ -40,7 +42,7 @@ class Chan extends ChannelBase {
     super(bufferOrN, transducer, exceptionHandler);
   }
   take () {}
-  asyncTake () {}
+  takeAsync () {}
   poll () {}
   flush () {
     let discard = csp.poll(this._chan);
@@ -48,7 +50,6 @@ class Chan extends ChannelBase {
       discard = csp.poll(this._chan);
     }
   }
-  checkOpen () {}
   isMixed () {}
 
 }
@@ -57,16 +58,11 @@ class Mult extends ChannelBase {
   constructor(bufferOrN, transducer, exceptionHandler) {
     super(bufferOrN, transducer, exceptionHandler);
   }
-  tap (chan, transducer) {
-    // include keepOpen?
-    // transducer is optional
-    // if a transducer is provided we need an intermediate channel
-    // keep track of intermediate chan to close it
+  tap (chan, keepOpen) {
   }
-
   // pipe not necessary because of tap
   // pipe (dest, keepOpen) {}
-  untap () {
+  untap (chan) {
     // Create an intermediate channel for pipelines?
     // If we do we need to match that with the tap channel
     // so that we can remove them both together
@@ -74,15 +70,14 @@ class Mult extends ChannelBase {
     // specifically
   }
   untapall () {
-    //untapall
+    // untapall
     // close all the taps
   }
-
-  pipeline (dest, xf, keepOpen) {
+  pipeline (chan, xf, keepOpen) {
     // ch = csp.chan(xf);
     // this.mult.tap(ch);
     // best way to send all the values?
-    // use pipe
+    // use csp.pipe
     // add ch to this.mult._taps so that it can be closed
   }
   pipelineAsync (n, dest, af, keepOpen) {}
