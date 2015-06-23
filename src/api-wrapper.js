@@ -1,3 +1,5 @@
+/* @flow */
+
 "use strict";
 
 var csp = require("./csp.js");
@@ -5,7 +7,7 @@ var csp = require("./csp.js");
 class Buffer {
   constructor(type, size) {
     var buffer;
-    switch type {
+    switch (type) {
       case 'fixed':
         buffer = csp.buffers.fixed(size);
         break;
@@ -31,11 +33,12 @@ class ChannelBase {
   }
   put () {}
   putAsync () {} // putAsync?
-  onto (iterableCollection) {} // returns a channel that closes on completion
+  onto (iterableCollection) {} // returns a channel primative that closes on completion
   offer () {}
   checkOpen () {}
   close() {}
 }
+
 
 class Chan extends ChannelBase {
   constructor(bufferOrN, transducer, exceptionHandler) {
@@ -70,28 +73,17 @@ class Mult extends ChannelBase {
   }
   tap (chan, keepOpen) {
   }
-  // pipe not necessary because of tap
-  // pipe (dest, keepOpen) {}
   untap (chan) {
-    // Create an intermediate channel for pipelines?
-    // If we do we need to match that with the tap channel
-    // so that we can remove them both together
-    // Keep track of any taps or pipes and remove them
-    // specifically
   }
-  untapall () {
+  untapAll () {
     // untapall
-    // close all the taps
   }
-  pipeline (chan, xf, keepOpen) {
-    // ch = csp.chan(xf);
-    // this.mult.tap(ch);
-    // best way to send all the values?
-    // use csp.pipe
-    // add ch to this.mult._taps so that it can be closed
+  pipe (bufferOrN, keepOpen = false) {/* returns a channel */}
+  pipeline (bufferOrN, xf, keepOpen = false) {
+    // returns a channel tapped to this Mult, transformed with xf
   }
-  pipelineAsync (n, dest, af, keepOpen) {}
-  split () {}
+  pipelineAsync (n, af, keepOpen) {}
+  // split () {}
 
   /*
   Don't flush multichannels because any values put on an
@@ -108,7 +100,9 @@ class Mult extends ChannelBase {
   the entire take cycle must complete or the tap/untap happens
   first.
 
-  May need to apply similar logic to Mix add/remove
+  May need to apply similar logic to Mix add/remove, which appears
+  to queue adds and removes by queuing them into a channel and yielding
+  to all mix sources and the state modifications
   */
 
 }
@@ -144,6 +138,7 @@ var Chan = function(bufferOrN, transducer, exceptionHandler) {
 
   this.close = () => this._chan.close();
   this.checkOpen = () => !this._chan.closed;
+  this.isMixed = () => {};
 
 };
 
@@ -172,7 +167,13 @@ class Mix {
     this._mix = csp.operations.mix(channel._chan);
   }
   // should the channel know whether it's mixed?
-  add: () => {/*check hasConsumer ... or is mult?*/},
+  add: () => {
+  /*
+  Check that the value is a channel and not a mult
+  Make sure the channel is not being consumed by another mixer
+  return true if successful, false otherwise
+  */
+  },
   remove: () => {},
   mute: (...ch) => {},
   unmute: (...ch) => {},
@@ -193,11 +194,25 @@ class Mix {
 }
 
 
-
-
-var timeout = function(msec) {
-  return {_chan: csp.timeout(msec)};
+/*
+If both of these extend Chan, we can add a check for instanceof Chan
+in process.js for implicit taking of goroutines, timeouts, and channels.
+Will not be possible to take from Mults, which is the desired behavior.
+*/
+class go extends Chan {
+  constructor(gen, args) {
+    this._chan = csp.go(gen, args)
+  }
 }
+class timeout extends Chan{
+  constructor(msec) {
+    this._chan = csp.timeout(msec);
+  }
+}
+
+// var timeout = function(msec) {
+//   return {_chan: csp.timeout(msec)};
+// }
 
 
 var alts = (...operations) => {
@@ -216,6 +231,6 @@ module.exports = {
   Mult: Mult,
   Buffer: Buffer,
   timeout: timeout,
-  go: csp.go,
+  go: go,
   alts: alts,
 };
