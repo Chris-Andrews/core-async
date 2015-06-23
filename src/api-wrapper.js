@@ -102,6 +102,8 @@ class Mult extends ChannelBase {
   This could be fixed by yielding to alts(taps,ch) so that
   the entire take cycle must complete or the tap/untap happens
   first.
+
+  May need to apply similar logic to Mix add/remove
   */
 
 }
