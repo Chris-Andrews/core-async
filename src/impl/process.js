@@ -3,6 +3,7 @@
 var dispatch = require("./dispatch");
 var select = require("./select");
 var Channel = require("./channels").Channel;
+var API = require("../api-wrapper");
 
 var NO_VALUE = null;
 
@@ -124,6 +125,12 @@ Process.prototype.run = function(response) {
   }
   else if(ins instanceof Channel) {
     var channel = ins;
+    take_then_callback(channel, function(value) {
+      self._continue(value);
+    });
+  }
+  else if (ins instanceof API.Chan) {
+    var channel = ins._chan;
     take_then_callback(channel, function(value) {
       self._continue(value);
     });
