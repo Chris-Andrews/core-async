@@ -2,151 +2,191 @@
 
 var csp = require("./csp.js");
 
-var Channel = function(bufferOrN, transducer, exceptionHandler) {
+class Buffer {
+  constructor(type, size) {
+    var buffer;
+    switch type {
+      case 'fixed':
+        buffer = csp.buffers.fixed(size);
+        break;
+      case 'dropping':
+        buffer = csp.buffers.dropping(size);
+        break;
+      case 'sliding':
+        buffer = csp.buffers.sliding(size);
+        break;
+      default:
+        throw new Error('Unknown buffer type: ' + type);
+    }
+    this.type = type;
+    this.size = size;
+    this._buffer = buffer;
+  }
+}
+
+class ChannelBase {
+  constructor(bufferOrN, transducer, exceptionHandler) {
+    //_chan
+  }
+  put () {}
+  asyncPut () {}
+  asyncPutIterable () {}
+  offer () {}
+  checkOpen () {}
+}
+
+class Chan extends ChannelBase {
+  constructor(bufferOrN, transducer, exceptionHandler) {
+    super(bufferOrN, transducer, exceptionHandler);
+  }
+  take () {}
+  asyncTake () {}
+  poll () {}
+  flush () {
+    let discard = csp.poll(this._chan);
+    while (discard !== null) {
+      discard = csp.poll(this._chan);
+    }
+  }
+  checkOpen () {}
+  isMixed () {}
+
+}
+
+class Mult extends ChannelBase {
+  constructor(bufferOrN, transducer, exceptionHandler) {
+    super(bufferOrN, transducer, exceptionHandler);
+  }
+  tap (chan, transducer) {
+    // include keepOpen?
+    // transducer is optional
+    // if a transducer is provided we need an intermediate channel
+    // keep track of intermediate chan to close it
+  }
+
+  // pipe not necessary because of tap
+  // pipe (dest, keepOpen) {}
+  untap () {
+    // Create an intermediate channel for pipelines?
+    // If we do we need to match that with the tap channel
+    // so that we can remove them both together
+    // Keep track of any taps or pipes and remove them
+    // specifically
+  }
+  untapall () {
+    //untapall
+    // close all the taps
+  }
+
+  pipeline (dest, xf, keepOpen) {
+    // ch = csp.chan(xf);
+    // this.mult.tap(ch);
+    // best way to send all the values?
+    // use pipe
+    // add ch to this.mult._taps so that it can be closed
+  }
+  pipelineAsync (n, dest, af, keepOpen) {}
+  split () {}
+
+  /*
+  Don't flush multichannels because any values put on an
+  untapped mult will be immediately taken and not distributed
+  to any channels. The only situation where values can
+  accumulate is when the mult is waiting on one or more
+  slow takers.
+  */
+
+  /*
+  Could tap/untap while takes are pending be problematic?
+  Mutate taps state while takes are still completing?
+  This could be fixed by yielding to alts(taps,ch) so that
+  the entire take cycle must complete or the tap/untap happens
+  first.
+  */
+
+}
+
+var Chan = function(bufferOrN, transducer, exceptionHandler) {
   if (bufferOrN) {
     var buffer = (isFinite(bufferOrN) ? bufferOrN : bufferOrN._buffer);
   }
 
-  /*
-  "chan" is the true channel of this object, however, we won't act on it
-  directly because this channel implementation will have a mult by default.
-
-  These channels can operate in linear fashion (single puts and takes), or with
-  one or more consumers (taps, pipes, pipelines, etc). Standard takes and
-  asyncTakes can only be performed if there are no consumers of a channel.
-  Otherwise, takes succeed only when all consumers are able to take from a mult
-  channel.
-
-  This will add some overhead to performance, but will be useful for exploring
-  this API. If the performance of simpler channels is needed in the future, the
-  implementations could be divided into separate classes, e.g. Channel and
-  MultChannel. One consideration of doing this is that the current
-  implementation allows us to pipe to a channel and later pipe to another. This
-  is accomplished due to the untapall function of the mult.
-
-  */
-  var chan = csp.chan(buffer, transducer, exceptionHandler);
-  this._chan = csp.chan();
+  this._chan = csp.chan(buffer, transducer, exceptionHandler);
   this._mix = csp.operations.mix(this._chan);
-  this._mult = csp.operations.mult(chan);
 
-  this.mult = {
-    tap: () => {},
-    untap: () => {},
-    untapall: () => {
-      //untapall
-      //tap this._chan;
-    },
-    pipe = (dest, keepOpen) => {};
-    pipeline = (dest, xf, keepOpen) => {
-      // ch = csp.chan(xf);
-      // this.mult.tap(ch);
-      // best way to send all the values?
-      // use pipe
-      // add ch to this.mult._taps so that it can be closed
-    };
-    pipelineAsync = (n, dest, af, keepOpen) => {};
-    split = () => {};
-    hasConsumer = false;
-  };
-  this.mult.tap(this._chan);
+  this.put = value => csp.put(this._chan, value);
+  this.take = () => csp.take(this._chan);
 
-  this.mix = {
-    add: () => {/*check hasConsumer ... or is mult?*/},
-    remove: () => {},
-    mute: (...ch) => {},
-    unmute: (...ch) => {},
-    pause: (...ch) => {},
-    unpause: (...ch) => {},
-    focus: (...ch) => {},
-    unfocus: (...ch) => {},
-    setFocusMode: (mode) => {
-      switch mode {
-        case: 'mute'
-          break;
-        case: 'pause'
-          break;
-        default:
-          throw new Error('Unrecognized focus mode: ' + mode);
-      }
-    },
-  };
-
-  this.asyncPut = (value, callback) => csp.putAsync(chan, value, callback);
+  this.asyncPut = (value, callback) => csp.putAsync(this._chan, value, callback);
   this.asyncPutIterable = (collection, callback) => {
-    collection.forEach(item => csp.putAsync(chan, item, callback));
+    collection.forEach(item => csp.putAsync(this._chan, item, callback));
   };
   this.asyncTake = callback => {
     // check for consumer
-    csp.takeAsync(chan, callback)
+    csp.takeAsync(this._chan, callback)
   }
 
-  this.offer = (value) => csp.offer(chan,value);
-  this.poll = () => {
-    // check for consumer
-    csp.poll(chan);
-  }
+  this.offer = (value) => csp.offer(this._chan,value);
+  this.poll = () => csp.poll(this._chan);
   this.flush = () => {
-    let discard = csp.poll(chan);
+    let discard = csp.poll(this._chan);
     while (discard !== null) {
-      discard = csp.poll(chan);
+      discard = csp.poll(this._chan);
     }
   };
 
-  this.put = value => {csp.put(chan, value);};
-  this.take = () => {
-    // check for consumer
-    csp.take(chan)
-  }
-
-
-  // reduced and into functionality
-  // use a side-effect causing reducing function?
-  // map(x => {array.push(x); console.log(x)}) // x is defined in outer scope
-
-  // pub-sub can be re-created from mult+transducers
-  // this.pub = () => {};
-  // this.sub = () => {};
-  // publication has subscribe method?
-
-  // Merging is relatively simple using mix(ers)
-  // this.merge = () => {
-  //   // call consumer on both channels
-  // };
-
-
-
-
-  this.close = () => chan.close();
-  this.checkOpen = () => !chan.closed;
+  this.close = () => this._chan.close();
+  this.checkOpen = () => !this._chan.closed;
 
 };
 
-var Buffer = function(type, size) {
-  var buffer;
-  switch type {
-    case 'fixed':
-      buffer = csp.buffers.fixed(size);
-      break;
-    case 'dropping':
-      buffer = csp.buffers.dropping(size);
-      break;
-    case 'sliding':
-      buffer = csp.buffers.sliding(size);
-      break;
-    // case 'promise':
-    //   if (size) {
-    //     throw new Error('Promise buffer does not accept a size parameter');
-    //   }
-    //   buffer = csp.buffers.promise();
-    //   break;
-    default:
-      throw new Error('Unknown buffer type: ' + type);
-  }
-  this.type = type;
-  this.size = size;
-  this._buffer = buffer;
+var Mult = function() {
+  tap: () => {},
+  untap: () => {},
+  untapall: () => {
+    //untapall
+    // close all the taps
+  },
+  pipe = (dest, keepOpen) => {};
+  pipeline = (dest, xf, keepOpen) => {
+    // ch = csp.chan(xf);
+    // this.mult.tap(ch);
+    // best way to send all the values?
+    // use pipe
+    // add ch to this.mult._taps so that it can be closed
+  };
+  pipelineAsync = (n, dest, af, keepOpen) => {};
+  split = () => {};
 }
+
+class Mix {
+  constructor(channel) {
+    // this._chan = channel._chan;
+    this._mix = csp.operations.mix(channel._chan);
+  }
+  // should the channel know whether it's mixed?
+  add: () => {/*check hasConsumer ... or is mult?*/},
+  remove: () => {},
+  mute: (...ch) => {},
+  unmute: (...ch) => {},
+  pause: (...ch) => {},
+  unpause: (...ch) => {},
+  focus: (...ch) => {},
+  unfocus: (...ch) => {},
+  setFocusMode: (mode) => {
+    switch mode {
+      case: 'mute'
+        break;
+      case: 'pause'
+        break;
+      default:
+        throw new Error('Unrecognized focus mode: ' + mode);
+    }
+  },
+}
+
+
+
 
 var timeout = function(msec) {
   return {_chan: csp.timeout(msec)};
@@ -165,7 +205,8 @@ var alts = (...operations) => {
 };
 
 module.exports = {
-  Channel: Channel,
+  Chan: Chan,
+  Mult: Mult,
   Buffer: Buffer,
   timeout: timeout,
   go: csp.go,

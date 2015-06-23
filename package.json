@@ -3,9 +3,18 @@
   "version": "0.0.1",
   "description": "A fork of js-csp exploring a different API. Implementation will be kept in sync with js-csp as much as possible.",
   "keywords": [
-    "csp", "async", "concurrency", "channel",
-    "go", "clojure", "clojurescript", "core.async",
-    "es6", "generators", "yield", "coroutines"
+    "csp",
+    "async",
+    "concurrency",
+    "channel",
+    "go",
+    "clojure",
+    "clojurescript",
+    "core.async",
+    "es6",
+    "generators",
+    "yield",
+    "coroutines"
   ],
   "author": "fork: Chris Andrews <christopher.m.andrews@gmail.com> js-csp author: Nguyễn Tuấn Anh <ubolonton@gmail.com>",
   "repository": {
@@ -22,6 +31,7 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "babel": "^5.6.4",
     "browserify": "^6.0.2",
     "chai": "~1.9.0",
     "gulp": "^3.8.10",
@@ -29,6 +39,9 @@
     "mocha": "~1.17.1",
     "transducers.js": "^0.3.0",
     "vinyl-source-stream": "^1.0.0"
+  },
+  "peerDependencies": {
+    "babel": "^5.6.4"
   },
   "engines": {
     "node": ">=0.11.6"
@@ -39,6 +52,9 @@
   },
   "main": "./src/api-wrapper.js",
   "files": [
-    "src", "README.md", "CHANGELOG.md", "LICENSE"
+    "src",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ]
 }
