@@ -1,3 +1,5 @@
+/* @flow */
+
 var {
   Chan,
   Mult,
@@ -5,7 +7,7 @@ var {
   timeout,
   go,
   alts
-} = require('../../src/api-wrapper.js');
+} = require('../../src/api-wrapper');
 
 var ch1 = new Chan();
 
