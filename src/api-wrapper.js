@@ -227,7 +227,7 @@ var alts = (ops: Array<PutOp | Chan>, ...rest:Array<any>) => {
   // Want to be able to pass in an array or multiple args
   // yield alts(ch1, ch2);
   // - or -
-  // yield alts(chan_array);
+  // yield alts(ops_array);
   var ops_array = ops.map((op) => {
     if (!(op instanceof Chan)) {
       var e1 = op[0]._chan;
@@ -240,6 +240,10 @@ var alts = (ops: Array<PutOp | Chan>, ...rest:Array<any>) => {
   csp.alts(ops_array);
 };
 
+// Create a flush convenience function that has the same type signature as alts
+// flush(ch1,ch2,ch3) or flush(chan_array)
+var flush = () => {}
+
 module.exports = {
   Chan: Chan,
   Mult: Mult,
@@ -247,4 +251,5 @@ module.exports = {
   timeout: timeout,
   go: go,
   alts: alts,
+  flush: flush,
 };
