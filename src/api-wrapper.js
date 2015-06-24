@@ -5,7 +5,10 @@
 var csp = require("./csp.js");
 
 class Buffer {
-  constructor(type, size) {
+  type: string;
+  size: number;
+  _buffer: any;
+  constructor(type: string, size: number) {
     var buffer;
     switch (type) {
       case 'fixed':
@@ -27,62 +30,56 @@ class Buffer {
 }
 
 class ChannelBase {
-  constructor(bufferOrN, transducer, exceptionHandler) {
-    //this._chan = csp.chan();
-    //this.mix = new Mix(this._chan);
+  _chan: any;
+  mix: Mix;
+  constructor(bufferOrN: number | Buffer, transducer: any, exceptionHandler: function) {
+    var buffer;
+    if (bufferOrN) {
+      var buffer = (bufferOrN instanceof Buffer ? bufferOrN._buffer : bufferOrN);
+    }
+    this._chan = csp.chan(buffer, transducer, exceptionHandler);
+    this.mix = new Mix(this._chan);
   }
-  put () {}
-  putAsync () {} // putAsync?
+  put (value) {csp.put(this._chan, value)}
+  putAsync (value, fn) {csp.putAsync(this._chan, value, fn)} // putAsync?
   onto (iterableCollection) {} // returns a channel primative that closes on completion
-  offer () {}
-  checkOpen () {}
-  close() {}
+  offer (value) {csp.offer(this._chan, value)}
+  checkOpen () {return !this._chan.closed}
+  close() {this._chan.close()}
 }
 
 
 class Chan extends ChannelBase {
-  constructor(bufferOrN, transducer, exceptionHandler) {
+  _chan: any;
+  mix: Mix;
+  constructor(bufferOrN: number | Buffer, transducer: any, exceptionHandler: function) {
     super(bufferOrN, transducer, exceptionHandler);
   }
-  take () {}
-  /*
-  Note can modify process.js run method to add additional check for
-  instanceof APIChannel that will allow 'yield chan' or 'yield timeout'
-  to be implicit takes.
-
-  A check that will work for Chan and timeout is:
-  else if(ins._chan instanceof Channel) {}
-     note a problem with this approach is that we could wait on a Mult
-     when we should not be doing so
-  */
-  takeAsync () {}
-  poll () {}
+  take () {csp.take(this._chan)}
+  takeAsync (fn: function) {csp.takeAsync(this._chan,fn)}
+  poll () {csp.poll(this._chan)}
   flush () {
-    let discard = csp.poll(this._chan);
+    var discard = csp.poll(this._chan);
     while (discard !== null) {
       discard = csp.poll(this._chan);
     }
   }
-  isMixed () {}
+  // isMixed () {} // should this be included?
 
 }
 
 class Mult extends ChannelBase {
-  constructor(bufferOrN, transducer, exceptionHandler) {
+  constructor(bufferOrN: number | Buffer, transducer: any, exceptionHandler: function) {
     super(bufferOrN, transducer, exceptionHandler);
   }
-  tap (chan, keepOpen) {
-  }
-  untap (chan) {
-  }
-  untapAll () {
-    // untapall
-  }
-  pipe (bufferOrN, keepOpen = false) {/* returns a channel */}
-  pipeline (bufferOrN, xf, keepOpen = false) {
+  tap (chan: any, keepOpen: boolean) {}
+  untap (chan: any) {}
+  untapAll () {}
+  pipe (bufferOrN: number | Buffer, keepOpen: boolean = false) {/* returns a channel */}
+  pipeline (bufferOrN: number | Buffer, xf: any, keepOpen: boolean = false) {
     // returns a channel tapped to this Mult, transformed with xf
   }
-  pipelineAsync (n, af, keepOpen) {}
+  pipelineAsync (n: number, af: function, keepOpen: boolean) {}
   // split () {}
 
   /*
@@ -107,90 +104,92 @@ class Mult extends ChannelBase {
 
 }
 
-var Chan = function(bufferOrN, transducer, exceptionHandler) {
-  if (bufferOrN) {
-    var buffer = (isFinite(bufferOrN) ? bufferOrN : bufferOrN._buffer);
-  }
+// var Chan = function(bufferOrN, transducer, exceptionHandler) {
+//   if (bufferOrN) {
+//     var buffer = (isFinite(bufferOrN) ? bufferOrN : bufferOrN._buffer);
+//   }
+//
+//   this._chan = csp.chan(buffer, transducer, exceptionHandler);
+//   this._mix = csp.operations.mix(this._chan);
+//
+//   this.put = value => csp.put(this._chan, value);
+//   this.take = () => csp.take(this._chan);
+//
+//   this.asyncPut = (value, callback) => csp.putAsync(this._chan, value, callback);
+//   this.asyncPutIterable = (collection, callback) => {
+//     collection.forEach(item => csp.putAsync(this._chan, item, callback));
+//   };
+//   this.asyncTake = callback => {
+//     // check for consumer
+//     csp.takeAsync(this._chan, callback)
+//   }
+//
+//   this.offer = (value) => csp.offer(this._chan,value);
+//   this.poll = () => csp.poll(this._chan);
+//   this.flush = () => {
+//     let discard = csp.poll(this._chan);
+//     while (discard !== null) {
+//       discard = csp.poll(this._chan);
+//     }
+//   };
+//
+//   this.close = () => this._chan.close();
+//   this.checkOpen = () => !this._chan.closed;
+//   this.isMixed = () => {};
+//
+// };
 
-  this._chan = csp.chan(buffer, transducer, exceptionHandler);
-  this._mix = csp.operations.mix(this._chan);
-
-  this.put = value => csp.put(this._chan, value);
-  this.take = () => csp.take(this._chan);
-
-  this.asyncPut = (value, callback) => csp.putAsync(this._chan, value, callback);
-  this.asyncPutIterable = (collection, callback) => {
-    collection.forEach(item => csp.putAsync(this._chan, item, callback));
-  };
-  this.asyncTake = callback => {
-    // check for consumer
-    csp.takeAsync(this._chan, callback)
-  }
-
-  this.offer = (value) => csp.offer(this._chan,value);
-  this.poll = () => csp.poll(this._chan);
-  this.flush = () => {
-    let discard = csp.poll(this._chan);
-    while (discard !== null) {
-      discard = csp.poll(this._chan);
-    }
-  };
-
-  this.close = () => this._chan.close();
-  this.checkOpen = () => !this._chan.closed;
-  this.isMixed = () => {};
-
-};
-
-var Mult = function() {
-  tap: () => {},
-  untap: () => {},
-  untapall: () => {
-    //untapall
-    // close all the taps
-  },
-  pipe = (dest, keepOpen) => {};
-  pipeline = (dest, xf, keepOpen) => {
-    // ch = csp.chan(xf);
-    // this.mult.tap(ch);
-    // best way to send all the values?
-    // use pipe
-    // add ch to this.mult._taps so that it can be closed
-  };
-  pipelineAsync = (n, dest, af, keepOpen) => {};
-  split = () => {};
-}
+// var Mult = function() {
+//   tap: () => {},
+//   untap: () => {},
+//   untapall: () => {
+//     //untapall
+//     // close all the taps
+//   },
+//   pipe = (dest, keepOpen) => {};
+//   pipeline = (dest, xf, keepOpen) => {
+//     // ch = csp.chan(xf);
+//     // this.mult.tap(ch);
+//     // best way to send all the values?
+//     // use pipe
+//     // add ch to this.mult._taps so that it can be closed
+//   };
+//   pipelineAsync = (n, dest, af, keepOpen) => {};
+//   split = () => {};
+// }
 
 class Mix {
+  // _chan: any;
+  _mix: any;
   constructor(channel) {
     // this._chan = channel._chan;
     this._mix = csp.operations.mix(channel._chan);
   }
   // should the channel know whether it's mixed?
-  add: () => {
+  add () {
   /*
   Check that the value is a channel and not a mult
   Make sure the channel is not being consumed by another mixer
   return true if successful, false otherwise
   */
-  },
-  remove: () => {},
-  mute: (...ch) => {},
-  unmute: (...ch) => {},
-  pause: (...ch) => {},
-  unpause: (...ch) => {},
-  focus: (...ch) => {},
-  unfocus: (...ch) => {},
-  setFocusMode: (mode) => {
-    switch mode {
-      case: 'mute'
+  }
+  remove ()  {}
+  mute (...ch)  {}
+  unmute (...ch)  {}
+  pause (...ch)  {}
+  unpause (...ch)  {}
+  focus (...ch)  {}
+  unfocus (...ch)  {}
+  setFocusMode (mode)  {
+    switch (mode) {
+      case 'mute':
         break;
-      case: 'pause'
+      case 'pause':
         break;
       default:
         throw new Error('Unrecognized focus mode: ' + mode);
     }
-  },
+  }
 }
 
 
@@ -200,12 +199,14 @@ in process.js for implicit taking of goroutines, timeouts, and channels.
 Will not be possible to take from Mults, which is the desired behavior.
 */
 class go extends Chan {
-  constructor(gen, args) {
+  _chan: any;
+  constructor(gen: function, args: Array<any>) {
     this._chan = csp.go(gen, args)
   }
 }
 class timeout extends Chan{
-  constructor(msec) {
+  _chan: any;
+  constructor(msec: number) {
     this._chan = csp.timeout(msec);
   }
 }
@@ -215,11 +216,24 @@ class timeout extends Chan{
 // }
 
 
-var alts = (...operations) => {
-  var ops_array = operations.map((op) => {
-    if (op instanceof Array) {
+function Test (val: [Chan, any]){
+  val[0]._chan;
+}
+
+type PutOp = [Chan, any];
+// var alts = (...operations: Array<Chan | [<Chan>, <any>]>) => {
+var alts = (ops: Array<PutOp | Chan>, ...rest:Array<any>) => {
+
+  // Want to be able to pass in an array or multiple args
+  // yield alts(ch1, ch2);
+  // - or -
+  // yield alts(chan_array);
+  var ops_array = ops.map((op) => {
+    if (!(op instanceof Chan)) {
+      var e1 = op[0]._chan;
       return [op[0]._chan, op[1]];
     } else {
+      op._chan;
       return op._chan;
     }
   });
