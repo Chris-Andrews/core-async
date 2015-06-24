@@ -222,8 +222,15 @@ function Test (val: [Chan, any]){
 
 type PutOp = [Chan, any];
 // var alts = (...operations: Array<Chan | [<Chan>, <any>]>) => {
-var alts = (ops: Array<PutOp | Chan>, ...rest:Array<any>) => {
+var alts = (ops: Array<PutOp | Chan>, ...rest:Array<Chan | PutOp>) => {
 
+  rest.map((x)=>{
+    if (x instanceof Chan) {
+      x._chan;
+    } else {
+      x[0]._chan;
+    }
+  });
   // Want to be able to pass in an array or multiple args
   // yield alts(ch1, ch2);
   // - or -
@@ -240,7 +247,12 @@ var alts = (ops: Array<PutOp | Chan>, ...rest:Array<any>) => {
   csp.alts(ops_array);
 };
 
-// Create a flush convenience function that has the same type signature as alts
+// altsp = alts with priority
+var altsp = () => {}
+
+
+
+// Create a flush convenience function that has similar type signature as alts
 // flush(ch1,ch2,ch3) or flush(chan_array)
 var flush = () => {}
 
