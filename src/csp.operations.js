@@ -451,7 +451,7 @@ function mult(ch) {
   }
   go(function*() {
     while (true) {
-      var value = yield take(ch);
+      var value = yield take(ch); // yield alts(inchannel, closemultchan)
       var id, t;
       var taps = m.taps;
       if (value === CLOSED) {

@@ -3,7 +3,7 @@
 var dispatch = require("./dispatch");
 var select = require("./select");
 var Channel = require("./channels").Channel;
-var API = require("../api-wrapper");
+var TakeChannel = require("../api-TakeChannel");
 
 var NO_VALUE = null;
 
@@ -129,7 +129,8 @@ Process.prototype.run = function(response) {
       self._continue(value);
     });
   }
-  else if (ins instanceof API.Chan) {
+  // TakeChannel includes API: Chan, Mix, Go, and Alts
+  else if (ins instanceof TakeChannel) {
     var channel = ins._chan;
     take_then_callback(channel, function(value) {
       self._continue(value);

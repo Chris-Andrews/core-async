@@ -3,127 +3,154 @@
 "use strict";
 
 var csp = require("./csp.js");
+var TakeChannel = require('./api-TakeChannel.js');
 
-class Buffer {
-  type: string;
-  size: number;
-  _buffer: any;
-  constructor(type: string, size: number) {
-    var buffer;
-    switch (type) {
-      case 'fixed':
-        buffer = csp.buffers.fixed(size);
-        break;
-      case 'dropping':
-        buffer = csp.buffers.dropping(size);
-        break;
-      case 'sliding':
-        buffer = csp.buffers.sliding(size);
-        break;
-      default:
-        throw new Error('Unknown buffer type: ' + type);
-    }
-    this.type = type;
-    this.size = size;
-    this._buffer = buffer;
-  }
-}
+type Transducer = any;
+type ExceptionHandler = (exception: Error)=>any;
+type Buffer = {type: string, size: number};
+type EventPair = [EventTarget | string, Event];
 
-class ChannelBase {
+class Chan extends TakeChannel {
   _chan: any;
-  mix: Mix;
-  constructor(bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: function) {
-    var buffer;
-    if (bufferOrN) {
-      var buffer = (bufferOrN instanceof Buffer ? bufferOrN._buffer : bufferOrN);
-    }
-    this._chan = csp.chan(buffer, transducer, exceptionHandler);
-    this.mix = new Mix(this._chan);
-  }
-  put (value) {csp.put(this._chan, value)}
-  putAsync (value, fn) {csp.putAsync(this._chan, value, fn)} // putAsync?
-  onto (iterableCollection: Iterable) {} // returns a channel primative that closes on completion--implement as goroutine?
-  offer (value) {csp.offer(this._chan, value)}
-  subscribe() {}
-  checkOpen () {return !this._chan.closed}
-  close() {this._chan.close()}
-}
-
-class Chan extends ChannelBase {
-  _chan: any;
-  mix: Mix;
-  constructor(bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: function) {
+  constructor(bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x:any)=>any) {
     super(bufferOrN, transducer, exceptionHandler);
   }
-  take () {csp.take(this._chan)}
-  takeAsync (fn: function) {csp.takeAsync(this._chan,fn)}
-  poll () {csp.poll(this._chan)}
-  flush () {
-    var discard = csp.poll(this._chan);
-    while (discard !== null) {
-      discard = csp.poll(this._chan);
-    }
+
+  put (value: any): ?any {return csp.put(this._chan, value)}
+  putAsync (value: any, fn?: (x:any)=>any) {csp.putAsync(this._chan, value, fn)} // putAsync?
+  offer (value: any): boolean {return csp.offer(this._chan, value)}
+  close() {
+    // remove event listeners
+    this._chan.close()
   }
+  addEvent (): Chan {return this}
+  removeEvent (): Chan {return this}
 }
 
 type TapOp = [Chan, boolean];
-class Mult extends ChannelBase {
-  constructor(bufferOrN: number | Buffer, transducer: any, exceptionHandler: function) {
-    super(bufferOrN, transducer, exceptionHandler);
-  }
+type AsyncFunction = (x: any, chan: Chan) => any;
 
-  // Accepts: Chan and bool | array of chan and bools
-  tap (chan: any, keepOpen: boolean) {}
-  // Accepts a Chan, multiple Chans, or an array of Chans
-  untap (chan: any) {}
-  untapAll () {}
-  pipe (bufferOrN: number | Buffer, keepOpen: boolean = false) {/* returns a channel */}
-  pipeline (bufferOrN: number | Buffer, xf: any, keepOpen: boolean = false) {
-    // returns a channel tapped to this Mult, transformed with xf
+class Mult {
+  _mult: any;
+  constructor(channel: Chan) {
+    this._mult = csp.operations.mult(channel._chan);
   }
-  reduce (fn: function, init: any) {} // returns a go-routine that puts the reduction on close of Mult
-  pipelineAsync (n: number, af: function, keepOpen: boolean) {}
+  // Accepts a Chan, multiple Chans, or an array of Chans
+  tap (chan: any, ...rest: Array < Transducer | boolean >): Mult {return this}
+  tapAsync(chan: any, asyncfn: (x:any)=>any, keepOpen?: boolean = false,
+    n?: number = 32): Mult {return this}
+  untap (chan: any): Mult {return this}
+  untapAll (): Mult {return this}
+  reduce (fn: (x:any)=>any, init: any): Go {return new Go(()=>{})}
+
+  // reduce: returns a go-routine that puts the reduction on close of Chan?
+  // untapping before close means it will no longer receive values and never put?
+
+  // Close releases the consumed channel and distributes the closed value to taps
+  // close () {/* Any mult-specific cleanup */}
+
 }
 
-class Mix {
-  _mix: any;
-  constructor(channel) {
-    this._mix = csp.operations.mix(channel._chan);
+// Helper function that will parse mix function syntax options:
+var parseChannels = (arg,rest) => {
+  if (arg instanceof Array) {
+    return arg;
+  } else {
+    return [arg].concat(rest);
   }
-  // All of these functions accept a Chan, multiple Chans, or an array of Chans
-  add (channel: Chan) {}
-  remove (channel: Chan)  {}
-  mute (...ch)  {}
-  unmute (...ch)  {}
-  pause (...ch)  {}
-  unpause (...ch)  {}
-  focus (...ch)  {}
-  unfocus (...ch)  {}
-  setFocusMode (mode)  {
+}
+class Mix extends TakeChannel {
+  _chan: any;
+  _mix: any;
+  _events: any;
+  constructor(bufferOrN?: number | Buffer, transducer?: Transducer, exceptionHandler?: ExceptionHandler) {
+    super(bufferOrN, transducer, exceptionHandler);
+    this._mix = csp.operations.mix(this._chan);
+  }
+
+  add(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+    var chanArray = parseChannels(arg,rest);
+    chanArray.forEach((c)=>{csp.operations.mix.add(this._mix, c._chan)});
+    return this;
+  }
+  remove(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+    var chanArray = parseChannels(arg,rest);
+    chanArray.forEach((c)=>{csp.operations.mix.remove(this._mix, c._chan)});
+    return this;
+  }
+  pause(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+    var chanArray = parseChannels(arg,rest);
+    var toggle_ops = chanArray.map((x)=>{[this._chan, {pause: true}]});
+    csp.operations.mix.toggle(this._mix, toggle_ops);
+    return this;
+  }
+  unpause(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+    var chanArray = parseChannels(arg,rest);
+    var toggle_ops = chanArray.map((x)=>{[this._chan, {pause: false}]});
+    csp.operations.mix.toggle(this._mix, toggle_ops);
+    return this;
+  }
+  mute(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+    var chanArray = parseChannels(arg,rest);
+    var toggle_ops = chanArray.map((x)=>{[this._chan, {mute: true}]});
+    csp.operations.mix.toggle(this._mix, toggle_ops);
+    return this;
+  }
+  unmute(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+    var chanArray = parseChannels(arg,rest);
+    var toggle_ops = chanArray.map((x)=>{[this._chan, {mute: true}]});
+    csp.operations.mix.toggle(this._mix, toggle_ops);
+    return this;
+  }
+  focus(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+    var chanArray = parseChannels(arg,rest);
+    var toggle_ops = chanArray.map((x)=>{[this._chan, {solo: true}]});
+    csp.operations.mix.toggle(this._mix, toggle_ops);
+    return this;
+  }
+  unfocus(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+    var chanArray = parseChannels(arg,rest);
+    var toggle_ops = chanArray.map((x)=>{[this._chan, {solo: false}]});
+    csp.operations.mix.toggle(this._mix, toggle_ops);
+    return this;
+  }
+  // setFocusMode(): Mix {return this}
+  setFocusMode (mode: string): Mix  {
+    var flag;
     switch (mode) {
       case 'mute':
+        flag = csp.operations.mix.MUTE;
         break;
       case 'pause':
+        flag = csp.operations.mix.PAUSE;
         break;
       default:
         throw new Error('Unrecognized focus mode: ' + mode);
     }
+    csp.operations.mix.setSoloMode(this._mix, flag);
+    return this;
   }
 }
 
-class Go extends Chan {
+
+
+class Go extends TakeChannel {
   _chan: any;
-  constructor(gen: function, args: Array<any>) {
+  constructor(gen: (x:any)=>any, args?: Array<any>) {
+    super();
     this._chan = csp.go(gen, args);
   }
 }
-function go (gen: function, args: Array<any>): Go {
+
+function go (gen: (x:any)=>any, args?: Array<any>): Go {
   return new Go(gen, args);
 }
 
-class Timeout extends Chan{
+
+class Timeout extends TakeChannel{
   _chan: any;
   constructor(msec: number) {
+    super();
     this._chan = csp.timeout(msec);
   }
 }
@@ -131,27 +158,19 @@ function timeout (msec: number): Timeout {
   return new Timeout(msec);
 }
 
-class Alts extends Chan{
-  _chan: any;
-  constructor(chan) {
-    this._chan = chan;
-  }
-}
 
+
+// Helper types and function for parsing alts/altsp arguments:
 type PutOp = [Chan, any];
-type TakeOp = Chan;
+type TakeOp = Chan; // Chan | Mix
 type ChanOp = PutOp | TakeOp;
-
 function getOpsArray(op, rest) {
   var ops;
   if (op instanceof Chan) {
-    ops = ([op]: Array<ChanOp>);
-    if (rest instanceof Array) {
-      ops = (ops.concat(rest): Array<ChanOp>);
-    }
+    ops = ([op].concat(rest): Array<ChanOp>);
   } else {
-    if (rest instanceof Array) {
-      ops = [op].concat(rest);
+    if (rest.length) {
+      ops = ([op].concat(rest): Array<ChanOp>);
     } else {
       ops = (op: Array<ChanOp>);
     }
@@ -170,58 +189,52 @@ function getOpsArray(op, rest) {
   return ops_array;
 }
 
-// accepts an array of ChanOps or multiple ChanOps
-var alts = (op: Array<ChanOp> | ChanOp, ...rest:Array<ChanOp>): Alts => {
-  var ops;
-  var ops_array = getOpsArray(op, rest);
-  var chan = csp.alts(ops_array);
-  return new Alts(chan);
-};
-
-// altsp = alts with priority
-var altsp = (op: ChanOp | Array<ChanOp>, ...rest:Array<ChanOp>): Alts => {
-  var ops;
-  var ops_array = getOpsArray(op, rest);
-  var chan = csp.alts(ops_array, {priority: true});
-  return new Alts(chan);
-};
-
-
-
-// Create a flush convenience function that has similar type signature as alts
-// flush(ch1,ch2,ch3) or flush(chan_array)
-var flush = (chan: Chan | Array<Chan>) => {
-  if (chan instanceof Chan) {
-    chan.flush();
-  } else {
-    chan.forEach((ch) => ch.flush());
+class Alts extends TakeChannel{
+  _chan: any;
+  constructor(chan) {
+    super();
+    this._chan = chan;
   }
 }
-var close = () => {}
 
-// csp.operations.js reduce implementation
-// 'true' argument never used? csp.go only accepts 2 argument
-/*
-function reduce(f, init, ch) {
-  return go(function*() {
-    var result = init;
-    while (true) {
-      var value = yield take(ch);
-      if (value === CLOSED) {
-        return result;
-      } else {
-        result = f(result, value);
-      }
-    }
-  }, [], true);
+// var alts = (op: Array<ChanOp> | ChanOp, ...rest: Array<ChanOp>): Alts => {
+//   var ops;
+//   var ops_array = getOpsArray(op, rest);
+//   var chan = csp.alts(ops_array);
+//   return new Alts(chan);
+// };
+//
+// // altsp = alts with priority based on order of operations
+// var altsp = (op: ChanOp | Array<ChanOp>, ...rest: Array<ChanOp>): Alts => {
+//   var ops;
+//   var ops_array = getOpsArray(op, rest);
+//   var chan = csp.alts(ops_array, {priority: true});
+//   return new Alts(chan);
+// };
+
+// Helper function for parsing flush and close arguments
+var getChanArray = (arg,rest) => {
+  if (arg instanceof Array) {
+    return arg;
+  } else {
+    return [arg].concat(rest);
+  }
 }
-*/
 
+var close = (arg: Chan | Array<Chan>, ...rest:Array<Chan>) => {
+  var chanArray = getChanArray(arg,rest);
+  chanArray.forEach((c)=>{c.close();});
+}
+
+var flush = (arg: Chan | Array<Chan>, ...rest: Array<Chan>) => {
+  var chanArray = getChanArray(arg,rest);
+  chanArray.forEach((c)=>{c.flush();});
+}
 
 module.exports = {
   Chan: Chan,
   Mult: Mult,
-  Buffer: Buffer,
+  Mix: Mix,
   timeout: timeout,
   go: go,
   alts: alts,
@@ -229,6 +242,32 @@ module.exports = {
   close: close,
   flush: flush,
 };
+
+/*
+TakeChannel becomes TakeChannel
+Chan extends TakeChannel and adds put operations + events
+Mix exetends TakeChannel and adds mixing operations
+Mult takes a channel as input and has tap/pipe/reduce operations
+
+Should TakeChannel implement pipe and pipeline?
+
+Do you need pipe if you can:
+new Mult(ch1).tap(ch2);
+
+what about pipeline?
+currently:
+new Mult(new Mult(ch1).pipeline(buf,xf)).tap(ch2);
+could be:
+new Mult(ch1,buffer,xform).tap(ch2);
+or:
+new Mult(ch1).tap(ch2,buf,xf)??
+ideal:
+new Mult(ch1).tap(ch2, xf)
+
+current csp code may not support closing Mults
+
+*/
+
 
 /*
 Don't flush multichannels because any values put on an
@@ -249,3 +288,114 @@ May need to apply similar logic to Mix add/remove, which appears
 to queue adds and removes by queuing them into a channel and yielding
 to all mix sources and the state modifications
 */
+
+// Removed from mult:
+// pipelineAsync (n: number, af: AsyncFunction, keepOpen: boolean = false) {
+
+  /*
+  do we want keepOpen to be true for pipelineAsync?
+  async work could finish after the source Mult has closed
+  need to look at the implementation of this
+  could implement this differently; specifically, without closing the chan
+
+  Alt implementation:
+  create a new channel afnchan that taps this mult
+  spawn a goroutine that takes from afnchan as soon as new items are
+  available
+  while value !== null, the goroutine will call asyncfn(value,outchan)
+  asyncfn will put to outchan on completion (could put a value or an error)
+  outchan is what we return to the user
+
+  untapping would have to be handled specially, because outchan is not
+  directly tapped
+  could accomplish this by keeping track of the afnchans that correspond to
+  each outchan
+
+  Is this really a necessary function?
+  without this function, the way to perform this action is to create a
+  channel, spawn a goroutine that takes while channel is open, calls an
+  async function on the value, and puts to another channel on completion. This
+  is probably a better and more CSP-like method, since the goroutine is more
+  transparent than a hidden async function. pipelineAsync also make assumptions
+  about what type of function the user should supply that
+  */
+// }
+
+// renaming onto putCollection so all of the simple put operations have the 'put' prefix
+// putCollection (iterableCollection: Iterable) {} // returns a channel primative that closes on completion--implement as goroutine?
+// [1,2,3].forEach((x,i,c)=>{(i===c.length) ? chan.putAsync(x,console.log('last take succeeded')) : chan.putAsync(x)})
+
+// Alterative get/set interface (not currently supported by flow):
+/*
+get closed():boolean {return this._chan.closed}
+set closed (value: boolean) {
+  if (this.closed) {
+    throw new Error('closed property cannot be set on a closed channel');
+  } else if (value===true) {
+    this.close();
+    this.closed = true;
+  } else if (value!==false) {
+    throw new Error('Cannot set closed property to: ${value}');
+  }
+}
+*/
+// checkOpen() function call may be a more pure and understandable approach
+
+// class Buffer {
+//   type: string;
+//   size: number;
+//   constructor(type: string, size: number) {
+//     var buffer;
+//     switch (type) {
+//       case 'fixed':
+//         break;
+//       case 'dropping':
+//         if (size < 1) {
+//           throw new Error('Dropping buffer size must be greater than 1');
+//         }
+//         break;
+//       case 'sliding':
+//         if (size < 1) {
+//           throw new Error('Sliding buffer size must be greater than 1');
+//         }
+//         break;
+//       default:
+//         throw new Error('Unknown buffer type: ' + type);
+//     }
+//     this.type = type;
+//     this.size = size;
+//   }
+// }
+
+
+// function getOpsArray(op: Array<ChanOp> | ChanOp, rest: Array<ChanOp>) {
+//   var ops = [];
+//   if (rest.length) {
+//     ops = [op].concat(rest);
+//   }
+//   else if (op instanceof Array) {
+//     ops = (op: Array<ChanOp>);
+//   }
+//   var ops_array = ops.map((op)=>{
+//     if (op instanceof Chan) {
+//       return op._chan;
+//     } else {
+//       var ch = op[0];
+//       var v = op[1];
+//       if (ch instanceof Chan) {
+//         return [ch._chan, v];
+//       }
+//     }
+//   });
+//   return ops_array;
+// }
+
+
+// tap(chan, af, 3, keepOpen)
+// do we need n? it seems like its use was for parallism in clojure
+// default n concurrency could be 32 (the size of the tasks buffer in dispatch.js)
+
+// pipe (bufferOrN: number | Buffer, keepOpen: boolean = false) {/* returns a channel */}
+// pipeline (bufferOrN: number | Buffer, xf: any, keepOpen: boolean = false) {
+//   // returns a channel tapped to this Mult, transformed with xf
+// }
