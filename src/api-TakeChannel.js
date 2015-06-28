@@ -1,6 +1,9 @@
 /* @flow */
 
-var csp = require("./csp.js");
+"use strict";
+
+var csp = require('./csp.js');
+var x = 1;
 
 
 type Transducer = any;
@@ -37,7 +40,13 @@ class TakeChannel {
   }
 
   take (): ?any {return csp.take(this._chan)}
-  takeAsync (fn?: (x:any)=>any) {return csp.takeAsync(this._chan,fn)}
+  takeAsync (fn?: (x?:any)=>any) {
+    if (typeof fn === 'function'){
+      return csp.takeAsync(this._chan, fn)
+    } else {
+      return csp.takeAsync(this._chan, ()=>{});
+    }
+  }
   poll (): ?any {return csp.poll(this._chan)}
   flush () {
     var discard = csp.poll(this._chan);
@@ -49,3 +58,7 @@ class TakeChannel {
 }
 
 module.exports = TakeChannel;
+// module.exports = {
+//   TakeChannel: TakeChannel,
+//   csp:csp
+// };

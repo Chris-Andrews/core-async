@@ -2,7 +2,8 @@
 
 "use strict";
 
-var csp = require("./csp.js");
+var csp = require('./csp.js');
+// var {TakeChannel, csp} = require('./api-TakeChannel.js');
 var TakeChannel = require('./api-TakeChannel.js');
 
 type Transducer = any;
@@ -12,12 +13,18 @@ type EventPair = [EventTarget | string, Event];
 
 class Chan extends TakeChannel {
   _chan: any;
-  constructor(bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x:any)=>any) {
+  constructor(bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x?:any)=>any) {
     super(bufferOrN, transducer, exceptionHandler);
   }
 
   put (value: any): ?any {return csp.put(this._chan, value)}
-  putAsync (value: any, fn?: (x:any)=>any) {csp.putAsync(this._chan, value, fn)} // putAsync?
+  putAsync (value: any, fn?: (x?:any)=>any) {
+    if (typeof fn === 'function'){
+      csp.putAsync(this._chan, value, fn)
+    } else {
+      csp.putAsync(this._chan, value, ()=>{})
+    }
+  }
   offer (value: any): boolean {return csp.offer(this._chan, value)}
   close() {
     // remove event listeners
@@ -37,11 +44,11 @@ class Mult {
   }
   // Accepts a Chan, multiple Chans, or an array of Chans
   tap (chan: any, ...rest: Array < Transducer | boolean >): Mult {return this}
-  tapAsync(chan: any, asyncfn: (x:any)=>any, keepOpen?: boolean = false,
+  tapAsync(chan: any, asyncfn: (x?:any)=>any, keepOpen?: boolean = false,
     n?: number = 32): Mult {return this}
   untap (chan: any): Mult {return this}
   untapAll (): Mult {return this}
-  reduce (fn: (x:any)=>any, init: any): Go {return new Go(()=>{})}
+  reduce (fn: (x?:any)=>any, init: any): Go {return new Go(()=>{})}
 
   // reduce: returns a go-routine that puts the reduction on close of Chan?
   // untapping before close means it will no longer receive values and never put?
@@ -136,13 +143,13 @@ class Mix extends TakeChannel {
 
 class Go extends TakeChannel {
   _chan: any;
-  constructor(gen: (x:any)=>any, args?: Array<any>) {
+  constructor(gen: (x?:any)=>any, args?: Array<any>) {
     super();
     this._chan = csp.go(gen, args);
   }
 }
 
-function go (gen: (x:any)=>any, args?: Array<any>): Go {
+function go (gen: (x?:any)=>any, args?: Array<any>): Go {
   return new Go(gen, args);
 }
 
@@ -175,37 +182,79 @@ function getOpsArray(op, rest) {
       ops = (op: Array<ChanOp>);
     }
   }
-  var ops_array = ops.map((op)=>{
+  var ops_array = [];
+
+
+
+  // This needs to be a man that can take objects as keys
+  // var chan_map = {};
+  var chan_map = new Map();
+
+
+
+  ops.forEach((op)=>{
     if (op instanceof Chan) {
-      return op._chan;
+      ops_array.push(op._chan);
+      chan_map.set(op._chan,  op);
+      // return op._chan;
     } else {
       var ch = op[0];
       var v = op[1];
       if (ch instanceof Chan) {
-        return [ch._chan, v];
+        ops_array.push([ch._chan, v]);
+        chan_map.set(ch._chan, ch._chan);
+        // return [ch._chan, v];
       }
     }
-  });
-  return ops_array;
+  })
+  // var ops_array = ops.map((op)=>{
+  //   if (op instanceof Chan) {
+  //     return op._chan;
+  //   } else {
+  //     var ch = op[0];
+  //     var v = op[1];
+  //     if (ch instanceof Chan) {
+  //       return [ch._chan, v];
+  //     }
+  //   }
+  // });
+  return {
+    ops_array: ops_array,
+    chan_map: chan_map
+  };
 }
 
-class Alts extends TakeChannel{
+class Alts extends Chan{
   _chan: any;
-  constructor(chan) {
+  constructor(chan, chan_map) {
     super();
-    this._chan = chan;
+    var _this = this;
+    csp.go(function*(chan, chan_map, _this){
+      var {channel, value} = yield chan;
+      var chan = chan_map.get(channel);
+      yield _this.put({channel: chan, value: value});
+    },[chan, chan_map, _this])
+    // this._chan = chan;
   }
 }
 
-// var alts = (op: Array<ChanOp> | ChanOp, ...rest: Array<ChanOp>): Alts => {
-//   var ops;
-//   var ops_array = getOpsArray(op, rest);
-//   var chan = csp.alts(ops_array);
-//   return new Alts(chan);
-// };
-//
-// // altsp = alts with priority based on order of operations
-// var altsp = (op: ChanOp | Array<ChanOp>, ...rest: Array<ChanOp>): Alts => {
+var alts = function (op: Array<ChanOp> | ChanOp, ...rest: Array<ChanOp>): Alts {
+  var ops;
+  var {ops_array, chan_map} = getOpsArray(op, rest);
+
+  var chan = csp.alts(ops_array);
+  return new Alts(chan,chan_map);
+  // var {channel, value} = csp.alts(ops_array);
+  // console.log(channel);
+  // return {
+  //   channel: chan_map[channel],
+  //   value: value,
+  // };
+  // return new Alts(chan);
+};
+
+// altsp = alts with priority based on order of operations
+// var altsp = function (op: ChanOp | Array<ChanOp>, ...rest: Array<ChanOp>): any {
 //   var ops;
 //   var ops_array = getOpsArray(op, rest);
 //   var chan = csp.alts(ops_array, {priority: true});
@@ -238,9 +287,10 @@ module.exports = {
   timeout: timeout,
   go: go,
   alts: alts,
-  altsp: altsp,
+  // altsp: altsp,
   close: close,
   flush: flush,
+  csp: csp,
 };
 
 /*
