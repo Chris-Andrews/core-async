@@ -1,15 +1,11 @@
 /* @flowz */
 
-
-require.ensure(['../../src/api-wrapper.js'],function(require) {
-
-
 var {
-  Chan,
-  Mult,
+  chan,
   timeout,
   go,
-  alts
+  alts,
+  altsp
 } = require('../../src/api-wrapper.js');
 
 
@@ -36,7 +32,7 @@ var {
 
 
 // // Async put and take
-// var ch1 = new Chan();
+// var ch1 = chan();
 // var value = 42;
 // ch1.takeAsync((x)=>{console.log(`Took: ${x}`)});
 // ch1.putAsync(value, ()=>{console.log(`Put: ${value}`)});
@@ -51,7 +47,7 @@ var {
 
 
 // // Offer and Poll:
-// var ch = new Chan();
+// var ch = chan();
 // console.log(ch.offer(1));
 // ch.takeAsync((x)=>{console.log(`Took: ${x}`)});
 // console.log(ch.offer(1));
@@ -62,7 +58,7 @@ var {
 
 
 // // Flush:
-// var ch = new Chan();
+// var ch = chan();
 // var value = 42;
 // ch.putAsync(value, ()=>{console.log(`Put: ${value}`)});
 // ch.takeAsync((x)=>{console.log(`Took: ${x}`)});
@@ -75,7 +71,7 @@ var {
 
 
 // // Close:
-// var ch = new Chan();
+// var ch = chan();
 // console.log(ch.checkOpen());
 // var value = 'hello';
 // ch.putAsync(value, (x)=>{console.log(`Put 1: ${value} Result: ${x}`)});
@@ -87,8 +83,8 @@ var {
 
 
 // // Goroutines:
-// var ch1 = new Chan();
-// // var ch2 = new Chan();
+// var ch1 = chan();
+// // var ch2 = chan();
 // go(function*(){
 //   var i = 1;
 //   while (yield ch1.put(i)) {
@@ -105,22 +101,15 @@ var {
 // })
 
 
-
-
-
 // Alts:
-var ch1 = new Chan();
-var ch2 = new Chan();
-var ch3 = new Chan();
-var ch4 = new Chan();
-var ch5 = new Chan();
+var ch1 = chan();
+var ch2 = chan();
+var ch3 = chan();
 ch1.putAsync(1);
 ch2.putAsync(2);
 ch3.putAsync(3);
-ch4.putAsync(4);
-ch5.putAsync(5);
 go(function*(){
-  var {channel, value} = yield alts(ch1, ch2, ch3, ch4, ch5);
+  var {channel, value} = yield alts(ch1, ch2, ch3); // altsp returns 1 every time
   switch (channel) {
     case ch1:
       console.log('Channel 1');
@@ -131,43 +120,36 @@ go(function*(){
     case ch3:
       console.log('Channel 3');
       break;
-    case ch4:
-      console.log('Channel 4');
-      break;
-    case ch5:
-      console.log('Channel 5');
-      break;
   }
   console.log(`Value: ${value}`);
 })
 
 
-//
-// var ch2 = new Chan();
-//
-// // buffering examples
-// // fixed
-// var ch2 = new Chan(1); // shorthand for new Chan(new Buffer('fixed', 3))
-// ch2.asyncPut(1, (value)=>{console.log('Put: ${value}')})
-// ch2.asyncPut(2, (value)=>{console.log('Put: ${value}')})
-// ch2.asyncPut(3, (value)=>{console.log('Put: ${value}')})
-// // dropping
-// var ch2 = new Chan(new Buffer('dropping',1));
-// ch2.asyncPut(1, (value)=>{console.log('Put: ${value}')})
-// ch2.asyncPut(2, (value)=>{console.log('Put: ${value}')})
-// ch2.asyncPut(3, (value)=>{console.log('Put: ${value}')})
-// // sliding
-// var ch2 = new Chan(new Buffer('sliding',1));
-// ch2.asyncPut(1, (value)=>{console.log('Put: ${value}')})
-// ch2.asyncPut(2, (value)=>{console.log('Put: ${value}')})
-// ch2.asyncPut(3, (value)=>{console.log('Put: ${value}')})
-//
-// // go block example
-
-
-
-
-
+// // Buffering
+// // Fixed
+// var ch = chan(1); // shorthand for chan(new Buffer('fixed', 3))
+// ch.putAsync(1, ()=>{console.log(`Put: ${1}`)})
+// ch.putAsync(2, ()=>{console.log(`Put: ${2}`)})
+// ch.putAsync(3, ()=>{console.log(`Put: ${3}`)})
+// ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
+// ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
+// ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
+// // Dropping
+// var ch = chan({type:'dropping',size:1});
+// ch.putAsync(1, ()=>{console.log(`Put: ${1}`)})
+// ch.putAsync(2, ()=>{console.log(`Put: ${2}`)})
+// ch.putAsync(3, ()=>{console.log(`Put: ${3}`)})
+// ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
+// ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
+// ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
+// // Sliding
+// var ch = chan({type:'sliding',size:1});
+// ch.putAsync(1, ()=>{console.log(`Put: ${1}`)})
+// ch.putAsync(2, ()=>{console.log(`Put: ${2}`)})
+// ch.putAsync(3, ()=>{console.log(`Put: ${3}`)})
+// ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
+// ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
+// ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
 
 
 
@@ -182,22 +164,3 @@ go(function*(){
 // add([target, event]);
 // add([chan1, chan2,[targ1, evt1], chan3, [targ2, evt2]]);
 // add(chan1, chan2, [targ1, evt1], chan3, [targ2, evt2]);
-
-// alts(chan1, chan2, [chan3, v3], chan4, [chan5, v5]);
-// alts(chan1);
-// alts([chan1, v1]);
-// alts([chan1, chan2, [chan3, v3], chan4, [chan5, v5]]);
-
-// Note: alts supports destructuing since it returns an object:
-// {value: value, channel: channel}
-// So we can do:
-// var {channel} = yield alts(chan1, chan2)
-// or var {channel, value} = yield alts(chan1, chan2);
-// switch (channel) {
-//  case chan1:
-//  case chan2:
-// }
-
-// window.csp = require('../../src/csp.js');
-// console.log(window.csp.chan);
-})

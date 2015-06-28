@@ -2,20 +2,82 @@
 
 "use strict";
 
+/*
+Note: rather than using typeof, consider checking for:
+TakeChannel['@@channels/take'] = this.take
+*/
+
 var csp = require('./csp.js');
-// var {TakeChannel, csp} = require('./api-TakeChannel.js');
-var TakeChannel = require('./api-TakeChannel.js');
+// var TakeChannel = require('./api-TakeChannel.js');
 
 type Transducer = any;
 type ExceptionHandler = (exception: Error)=>any;
 type Buffer = {type: string, size: number};
 type EventPair = [EventTarget | string, Event];
 
-class Chan extends TakeChannel {
+
+type Transducer = any;
+type ExceptionHandler = (exception: Error)=>any;
+type Buffer = {type: string, size: number};
+
+class TakeChannel {
   _chan: any;
+  constructor(bufferOrN?: number | Buffer, transducer?: Transducer, exceptionHandler?: ExceptionHandler) {
+    var buffer;
+    if (bufferOrN) {
+      if ((typeof bufferOrN)==='number'){
+        buffer = csp.buffers.fixed(bufferOrN);
+      } else {
+        if ((typeof bufferOrN.size !== 'number') || (bufferOrN.size < 1)) {
+          throw new Error('Buffer size must be number greater than 1');
+        }
+        switch (bufferOrN.type) {
+          case 'fixed':
+            buffer = csp.buffers.fixed(bufferOrN.size);
+            break;
+          case 'dropping':
+            buffer = csp.buffers.dropping(bufferOrN.size);
+            break;
+          case 'sliding':
+            buffer = csp.buffers.sliding(bufferOrN.size);
+            break;
+          default:
+            throw new Error('Unknown buffer type: ' + bufferOrN.type);
+        }
+      }
+    }
+    this._chan = csp.chan(buffer, transducer, exceptionHandler);
+  }
+
+  take (): ?any {return csp.take(this._chan)}
+  takeAsync (fn?: (x?:any)=>any) {
+    if (typeof fn === 'function'){
+      return csp.takeAsync(this._chan, fn)
+    } else {
+      return csp.takeAsync(this._chan, ()=>{});
+    }
+  }
+  poll (): ?any {return csp.poll(this._chan)}
+  flush () {
+    var discard = csp.poll(this._chan);
+    while (discard !== null) {
+      discard = csp.poll(this._chan);
+    }
+  }
+  checkOpen (): boolean {return this._chan.closed};
+}
+// Possible duck-typing may avoid problems with multiple instances
+// TakeChannel.prototype['@@core-async/takeable] = true;
+
+
+class Channel extends TakeChannel {
+  _chan: any;
+  _event_fn: () => any;
   constructor(bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x?:any)=>any) {
     super(bufferOrN, transducer, exceptionHandler);
+
   }
+
 
   put (value: any): ?any {return csp.put(this._chan, value)}
   putAsync (value: any, fn?: (x?:any)=>any) {
@@ -30,19 +92,29 @@ class Chan extends TakeChannel {
     // remove event listeners
     this._chan.close()
   }
-  addEvent (): Chan {return this}
-  removeEvent (): Chan {return this}
+  addEvent (evt: EventPair | Array<EventPair>, ...rest: Array<EventPair>): Channel {
+    // parse events
+    // subscribe listeners
+    // save events
+    return this
+  }
+  removeEvent (evt: EventPair | Array<EventPair>, ...rest: Array<EventPair>): Channel {
+    // parse events
+    // unsubscribe listeners
+    // remove events
+    return this
+  }
 }
 
-type TapOp = [Chan, boolean];
-type AsyncFunction = (x: any, chan: Chan) => any;
+type TapOp = [Channel, boolean];
+type AsyncFunction = (x: any, chan: Channel) => any;
 
 class Mult {
   _mult: any;
-  constructor(channel: Chan) {
+  constructor(channel: Channel) {
     this._mult = csp.operations.mult(channel._chan);
   }
-  // Accepts a Chan, multiple Chans, or an array of Chans
+  // Accepts a Channel, multiple Chans, or an array of Chans
   tap (chan: any, ...rest: Array < Transducer | boolean >): Mult {return this}
   tapAsync(chan: any, asyncfn: (x?:any)=>any, keepOpen?: boolean = false,
     n?: number = 32): Mult {return this}
@@ -50,7 +122,7 @@ class Mult {
   untapAll (): Mult {return this}
   reduce (fn: (x?:any)=>any, init: any): Go {return new Go(()=>{})}
 
-  // reduce: returns a go-routine that puts the reduction on close of Chan?
+  // reduce: returns a go-routine that puts the reduction on close of Channel?
   // untapping before close means it will no longer receive values and never put?
 
   // Close releases the consumed channel and distributes the closed value to taps
@@ -75,47 +147,47 @@ class Mix extends TakeChannel {
     this._mix = csp.operations.mix(this._chan);
   }
 
-  add(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+  add(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
     chanArray.forEach((c)=>{csp.operations.mix.add(this._mix, c._chan)});
     return this;
   }
-  remove(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+  remove(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
     chanArray.forEach((c)=>{csp.operations.mix.remove(this._mix, c._chan)});
     return this;
   }
-  pause(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+  pause(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
     var toggle_ops = chanArray.map((x)=>{[this._chan, {pause: true}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
-  unpause(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+  unpause(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
     var toggle_ops = chanArray.map((x)=>{[this._chan, {pause: false}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
-  mute(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+  mute(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
     var toggle_ops = chanArray.map((x)=>{[this._chan, {mute: true}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
-  unmute(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+  unmute(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
     var toggle_ops = chanArray.map((x)=>{[this._chan, {mute: true}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
-  focus(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+  focus(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
     var toggle_ops = chanArray.map((x)=>{[this._chan, {solo: true}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
-  unfocus(arg: Chan | Array<Chan>, ...rest: Array<Chan>): Mix {
+  unfocus(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
     var toggle_ops = chanArray.map((x)=>{[this._chan, {solo: false}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
@@ -168,12 +240,12 @@ function timeout (msec: number): Timeout {
 
 
 // Helper types and function for parsing alts/altsp arguments:
-type PutOp = [Chan, any];
-type TakeOp = Chan; // Chan | Mix
+type PutOp = [Channel, any];
+type TakeOp = Channel; // Channel | Mix
 type ChanOp = PutOp | TakeOp;
 function getOpsArray(op, rest) {
   var ops;
-  if (op instanceof Chan) {
+  if (op instanceof Channel) {
     ops = ([op].concat(rest): Array<ChanOp>);
   } else {
     if (rest.length) {
@@ -193,14 +265,14 @@ function getOpsArray(op, rest) {
 
 
   ops.forEach((op)=>{
-    if (op instanceof Chan) {
+    if (op instanceof Channel) {
       ops_array.push(op._chan);
       chan_map.set(op._chan,  op);
       // return op._chan;
     } else {
       var ch = op[0];
       var v = op[1];
-      if (ch instanceof Chan) {
+      if (ch instanceof Channel) {
         ops_array.push([ch._chan, v]);
         chan_map.set(ch._chan, ch._chan);
         // return [ch._chan, v];
@@ -208,12 +280,12 @@ function getOpsArray(op, rest) {
     }
   })
   // var ops_array = ops.map((op)=>{
-  //   if (op instanceof Chan) {
+  //   if (op instanceof Channel) {
   //     return op._chan;
   //   } else {
   //     var ch = op[0];
   //     var v = op[1];
-  //     if (ch instanceof Chan) {
+  //     if (ch instanceof Channel) {
   //       return [ch._chan, v];
   //     }
   //   }
@@ -224,7 +296,7 @@ function getOpsArray(op, rest) {
   };
 }
 
-class Alts extends Chan{
+class Alts extends Channel{
   _chan: any;
   constructor(chan, chan_map) {
     super();
@@ -232,7 +304,7 @@ class Alts extends Chan{
     csp.go(function*(chan, chan_map, _this){
       var {channel, value} = yield chan;
       var chan = chan_map.get(channel);
-      yield _this.put({channel: chan, value: value});
+      yield csp.put(_this._chan, {channel: chan, value: value});
     },[chan, chan_map, _this])
     // this._chan = chan;
   }
@@ -241,25 +313,17 @@ class Alts extends Chan{
 var alts = function (op: Array<ChanOp> | ChanOp, ...rest: Array<ChanOp>): Alts {
   var ops;
   var {ops_array, chan_map} = getOpsArray(op, rest);
-
   var chan = csp.alts(ops_array);
   return new Alts(chan,chan_map);
-  // var {channel, value} = csp.alts(ops_array);
-  // console.log(channel);
-  // return {
-  //   channel: chan_map[channel],
-  //   value: value,
-  // };
-  // return new Alts(chan);
 };
 
 // altsp = alts with priority based on order of operations
-// var altsp = function (op: ChanOp | Array<ChanOp>, ...rest: Array<ChanOp>): any {
-//   var ops;
-//   var ops_array = getOpsArray(op, rest);
-//   var chan = csp.alts(ops_array, {priority: true});
-//   return new Alts(chan);
-// };
+var altsp = function (op: ChanOp | Array<ChanOp>, ...rest: Array<ChanOp>): Alts {
+  var ops;
+  var {ops_array, chan_map} = getOpsArray(op, rest);
+  var chan = csp.alts(ops_array, {priority: true});
+  return new Alts(chan,chan_map);
+};
 
 // Helper function for parsing flush and close arguments
 var getChanArray = (arg,rest) => {
@@ -270,24 +334,43 @@ var getChanArray = (arg,rest) => {
   }
 }
 
-var close = (arg: Chan | Array<Chan>, ...rest:Array<Chan>) => {
+var close = (arg: Channel | Array<Channel>, ...rest:Array<Channel>) => {
   var chanArray = getChanArray(arg,rest);
   chanArray.forEach((c)=>{c.close();});
 }
 
-var flush = (arg: Chan | Array<Chan>, ...rest: Array<Chan>) => {
+var flush = (arg: Channel | Array<Channel>, ...rest: Array<Channel>) => {
   var chanArray = getChanArray(arg,rest);
   chanArray.forEach((c)=>{c.flush();});
 }
 
+/*
+createChan()
+createMix()
+createMult()
+*/
+
+
+function chan (bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x?:any)=>any): Channel {
+  return new Channel(bufferOrN, transducer, exceptionHandler);
+}
+
+function mix (bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x?:any)=>any): Mix {
+  return new Mix(bufferOrN, transducer, exceptionHandler);
+}
+
+function mult(channel: Channel): Mult {
+  return new Mult(channel);
+}
+
 module.exports = {
-  Chan: Chan,
-  Mult: Mult,
-  Mix: Mix,
+  chan: chan,
+  mix: mix,
+  mult: mult,
   timeout: timeout,
   go: go,
   alts: alts,
-  // altsp: altsp,
+  altsp: altsp,
   close: close,
   flush: flush,
   csp: csp,
