@@ -235,14 +235,15 @@ var {
 
 
 // // Event listeners
-// window.ch = new Chan().addEvent(['body','mousemove']);
+// var buf = {type:'sliding',size:1};
+// window.ch = new Chan(buf).addEvent(['body','mousemove']);
 // go(function*(){
 //   var e = yield window.ch;
 //   while (e !== null) {
 //     console.log(`Took: ${e}`);
 //     var e = yield window.ch;
 //   }
-// })
+// });
 // // Closing the channel in console will stop printing mouse events
 
 
