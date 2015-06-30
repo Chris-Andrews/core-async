@@ -13,7 +13,7 @@ var csp = require('./csp.js');
 type Transducer = any;
 type ExceptionHandler = (exception: Error)=>any;
 type Buffer = {type: string, size: number};
-type EventPair = [EventTarget | string, Event];
+type EventPair = [EventTarget | string | events$EventEmitter, Event];
 
 
 type Transducer = any;
@@ -72,10 +72,12 @@ class TakeChannel {
 
 class Channel extends TakeChannel {
   _chan: any;
-  _event_fn: () => any;
+  eventFn: (e:Event) => any;
+  eventMap: Map;
   constructor(bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x?:any)=>any) {
     super(bufferOrN, transducer, exceptionHandler);
-
+    this.eventFn = (e)=>{this.putAsync(e)}
+    this.eventMap = new Map();
   }
 
 
@@ -89,21 +91,84 @@ class Channel extends TakeChannel {
   }
   offer (value: any): boolean {return csp.offer(this._chan, value)}
   close() {
-    // remove event listeners
+    this.eventMap.forEach((set,target)=>{
+      set.forEach((e)=>{
+        if (target.removeEventListener !== undefined) {
+          target.removeEventListener(e, this.eventFn);
+        } else if (target.removeListener !== undefined) {
+          target.removeListener(e, this.eventFn);
+        } else {
+          throw new Error(`Target: ${target} methods removeEventListener/removeListener not found`)
+        }
+      })
+    })
     this._chan.close()
   }
   addEvent (evt: EventPair | Array<EventPair>, ...rest: Array<EventPair>): Channel {
-    // parse events
-    // subscribe listeners
-    // save events
+    var eventPairs = parseEvents(evt,rest);
+    eventPairs.forEach((p)=>{
+      // Keep track of subscribed listeners
+      if (this.eventMap.has(p[0])) {
+        if (this.eventMap.get(p[0]).has(p[1])) {
+          throw new Error(`Target: ${p[0]} Event: ${p[1]} listener already subscribed`);
+        } else {
+          this.eventMap.get(p[0]).add(p[1]);
+        }
+      } else {
+        this.eventMap.set(p[0], new Set([p[1]]));
+      }
+      // Add event listeners
+      if (p[0].addEventListener !== undefined) {
+        p[0].addEventListener(p[1], this.eventFn);
+      } else if (p[0].addListener !== undefined) {
+        p[0].addListener(p[1], this.eventFn);
+      } else {
+        throw new Error(`Target: ${p[0]} methods addEventListener/addListener not found`)
+      }
+    })
     return this
   }
   removeEvent (evt: EventPair | Array<EventPair>, ...rest: Array<EventPair>): Channel {
-    // parse events
-    // unsubscribe listeners
-    // remove events
+    var targetSet;
+    var eventPairs = parseEvents(evt,rest);
+    eventPairs.forEach((p)=>{
+      targetSet = this.eventMap.get(p[0]);
+      if (targetSet) {
+        if (targetSet.has(p[1])) {
+          if (p[0].removeEventListener !== undefined) {
+            p[0].removeEventListener(p[1], this.eventFn);
+          } else if (p[0].removeListener !== undefined) {
+            p[0].removeListener(p[1], this.eventFn);
+          } else {
+            throw new Error(`Target: ${p[0]} methods removeEventListener/removeListener not found`)
+          }
+          targetSet.delete(p[1]);
+          if (targetSet.size === 0) {
+            this.eventMap.delete(p[0]);
+          }
+        }
+      }
+    })
     return this
   }
+}
+function parseEvents(evt:any,rest:any):any {
+  var args = [evt].concat(rest);
+  var element;
+  var eventPairs = [];
+  args.forEach((p)=>{
+    if (typeof p[0] === 'string'){
+      element = document.querySelector(p[0]);
+      if (element) {
+        eventPairs.push([element, p[1]]);
+      } else {
+        throw new Error(`Query selector ${p[0]} not found`);
+      }
+    } else {
+      eventPairs.push([p[0], p[1]]);
+    }
+  });
+  return eventPairs;
 }
 
 type TapOp = [Channel, boolean];
@@ -157,39 +222,43 @@ class Mix extends TakeChannel {
     chanArray.forEach((c)=>{csp.operations.mix.remove(this._mix, c._chan)});
     return this;
   }
+  removeAll(): Mix {
+    csp.operations.mix.removeAll(this._mix);
+    return this;
+  }
   pause(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
-    var toggle_ops = chanArray.map((x)=>{[this._chan, {pause: true}]});
+    var toggle_ops = chanArray.map((x)=>{return [x._chan, {pause: true}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
   unpause(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
-    var toggle_ops = chanArray.map((x)=>{[this._chan, {pause: false}]});
+    var toggle_ops = chanArray.map((x)=>{return [x._chan, {pause: false}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
   mute(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
-    var toggle_ops = chanArray.map((x)=>{[this._chan, {mute: true}]});
+    var toggle_ops = chanArray.map((x)=>{return [x._chan, {mute: true}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
   unmute(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
-    var toggle_ops = chanArray.map((x)=>{[this._chan, {mute: true}]});
+    var toggle_ops = chanArray.map((x)=>{return [x._chan, {mute: true}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
   focus(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
-    var toggle_ops = chanArray.map((x)=>{[this._chan, {solo: true}]});
+    var toggle_ops = chanArray.map((x)=>{return [x._chan, {solo: true}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
   unfocus(arg: Channel | Array<Channel>, ...rest: Array<Channel>): Mix {
     var chanArray = parseChannels(arg,rest);
-    var toggle_ops = chanArray.map((x)=>{[this._chan, {solo: false}]});
+    var toggle_ops = chanArray.map((x)=>{return [x._chan, {solo: false}]});
     csp.operations.mix.toggle(this._mix, toggle_ops);
     return this;
   }
@@ -351,22 +420,25 @@ createMult()
 */
 
 
-function chan (bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x?:any)=>any): Channel {
+function createChan (bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x?:any)=>any): Channel {
   return new Channel(bufferOrN, transducer, exceptionHandler);
 }
 
-function mix (bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x?:any)=>any): Mix {
+function createMix (bufferOrN?: number | Buffer, transducer?: any, exceptionHandler?: (x?:any)=>any): Mix {
   return new Mix(bufferOrN, transducer, exceptionHandler);
 }
 
-function mult(channel: Channel): Mult {
+function createMult (channel: Channel): Mult {
   return new Mult(channel);
 }
 
 module.exports = {
-  chan: chan,
-  mix: mix,
-  mult: mult,
+  Chan: Channel,
+  Mix: Mix,
+  Mult: Mult,
+  // chan: chan,
+  // mix: mix,
+  // mult: mult,
   timeout: timeout,
   go: go,
   alts: alts,

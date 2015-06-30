@@ -1,7 +1,8 @@
 /* @flowz */
 
 var {
-  chan,
+  Chan,
+  Mix,
   timeout,
   go,
   alts,
@@ -102,27 +103,108 @@ var {
 
 
 // Alts:
-var ch1 = chan();
-var ch2 = chan();
-var ch3 = chan();
-ch1.putAsync(1);
-ch2.putAsync(2);
-ch3.putAsync(3);
-go(function*(){
-  var {channel, value} = yield alts(ch1, ch2, ch3); // altsp returns 1 every time
-  switch (channel) {
-    case ch1:
-      console.log('Channel 1');
-      break;
-    case ch2:
-      console.log('Channel 2');
-      break;
-    case ch3:
-      console.log('Channel 3');
-      break;
-  }
-  console.log(`Value: ${value}`);
-})
+// var ch1 = new Chan();
+// var ch2 = new Chan();
+// var ch3 = new Chan();
+// ch1.putAsync(1);
+// ch2.putAsync(2);
+// ch3.putAsync(3);
+// go(function*(){
+//   var {channel, value} = yield alts(ch1, ch2, ch3); // altsp returns 1 every time
+//   switch (channel) {
+//     case ch1:
+//       console.log('Channel 1');
+//       break;
+//     case ch2:
+//       console.log('Channel 2');
+//       break;
+//     case ch3:
+//       console.log('Channel 3');
+//       break;
+//   }
+//   console.log(`Value: ${value}`);
+// })
+
+
+// // Mix:
+// var mix = new Mix();
+//
+// var inChan1 = new Chan(),
+//     inChan2 = new Chan(),
+//     inChan3 = new Chan();
+//
+// mix.add(inChan1);
+// mix.add(inChan2);
+// mix.add(inChan3);
+//
+// // Let's listen to values that `outCh` receives
+// go(function*(){
+//     var value = yield mix;
+//     while (value !== null) {
+//         console.log("Got ", value);
+//         value = yield mix;
+//     }
+// });
+//
+//
+// // By default, every value put in the input channels will come out in `outCh`
+// inChan1.putAsync(1);
+// //=> "Got 1"
+// inChan2.putAsync(2);
+// //=> "Got 2"
+// inChan3.putAsync(3);
+// //=> "Got 3"
+//
+// // Let's pause `inChan2` and see what happens
+// mix.pause(inChan2);
+//
+// inChan1.putAsync(1);
+// //=> "Got 1"
+// inChan2.putAsync(2); // `outCh` won't receive this value (yet)
+// inChan3.putAsync(3);
+// //=> "Got 3"
+//
+// mix.unpause(inChan2);
+// //=> "Got 2"
+//
+// // Let's see how muting `inChan2` discards the values put into it
+// mix.mute(inChan2);
+//
+// inChan1.putAsync(1);
+// //=> "Got 1"
+// inChan2.putAsync(2); // `outCh` will never receive this value
+// inChan3.putAsync(3);
+// //=> "Got 3"
+//
+// mix.unmute(inChan2);
+//
+//
+// // Let's see how solo-ing channels implies (by default) muting the rest
+// mix.focus(inChan1, inChan2);
+//
+// inChan1.putAsync(1);
+// //=> "Got 1"
+// inChan2.putAsync(2);
+// //=> "Got 2"
+// inChan3.putAsync(3); // `outCh` will never receive this value
+//
+// mix.unfocus(inChan1, inChan2);
+//
+// // Let's see how we can configure the state of non-soloed channels to pause instead of mute
+// mix.setFocusMode('pause');
+// mix.focus(inChan1);
+//
+// inChan1.putAsync(1);
+// //=> "Got 1"
+// inChan2.putAsync(2); // `outCh` won't receive this value (yet)
+// inChan3.putAsync(3); // `outCh` won't receive this value (yet)
+//
+// mix.unfocus(inChan1);
+// //=> "Got 2"
+// //=> "Got 3"
+//
+// mix.removeAll();
+
 
 
 // // Buffering
@@ -150,6 +232,18 @@ go(function*(){
 // ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
 // ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
 // ch.takeAsync((value)=>{console.log(`Took: ${value}`)});
+
+
+// // Event listeners
+// window.ch = new Chan().addEvent(['body','mousemove']);
+// go(function*(){
+//   var e = yield window.ch;
+//   while (e !== null) {
+//     console.log(`Took: ${e}`);
+//     var e = yield window.ch;
+//   }
+// })
+// // Closing the channel in console will stop printing mouse events
 
 
 
