@@ -128,6 +128,8 @@ class Channel extends TakeChannel {
     })
     return this
   }
+  addErrorEvent(){}
+  addNodeCallback(){}
   removeEvent (evt: EventPair | Array<EventPair>, ...rest: Array<EventPair>): Channel {
     var targetSet;
     var eventPairs = parseEvents(evt,rest);

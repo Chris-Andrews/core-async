@@ -9,7 +9,6 @@ var {
   altsp
 } = require('../../src/api-wrapper.js');
 
-
 // window.Chan = Chan;
 // window.Mult = Mult;
 // window.timeout = timeout;
@@ -83,23 +82,26 @@ var {
 // ch.takeAsync((x)=>{console.log(`Took: ${x}`)});
 
 
-// // Goroutines:
-// var ch1 = chan();
-// // var ch2 = chan();
-// go(function*(){
-//   var i = 1;
-//   while (yield ch1.put(i)) {
-//     i++;
-//   }
-// })
-// go(function*(){
-//   var i = 0;
-//   while (i < 3) {
-//     var value = yield ch1;
-//     console.log(`Took: ${value}`);
-//     i++;
-//   }
-// })
+// Goroutines:
+window.ch1 = new Chan();
+window.ch2 = new Chan();
+go(function*(){
+  var i = 1;
+  while (i < 3) {
+    yield ch1.put(i);
+    // yield ch1.put(new Error);
+    i++;
+  }
+})
+go(function*(){
+  var i = 0;
+  var value;
+  while (value = yield ch1) {
+    // var value = yield ch1;
+    console.log(`Took: ${value}`);
+    // i++;
+  }
+})
 
 
 // Alts:

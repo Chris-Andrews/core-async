@@ -32,7 +32,11 @@ function put_then_callback(channel, value, callback) {
 function take_then_callback(channel, callback) {
   var result = channel._take(new FnHandler(callback));
   if (result) {
-    callback(result.value);
+    // if (result.value instanceof Error) {
+    //   throw result.value;
+    // } else {
+      callback(result.value);
+    // }
   }
 }
 
@@ -79,6 +83,10 @@ Process.prototype.run = function(response) {
   if (this.finished) {
     return;
   }
+
+  // if (response instanceof Error) {
+  //   throw response;
+  // }
 
   // TODO: Shouldn't we (optionally) stop error propagation here (and
   // signal the error through a channel or something)? Otherwise the
