@@ -111,8 +111,8 @@
 	        _value = context$1$0.sent;
 	
 	        if (_value) {
-	          clickX = _value.clientX;
-	          clickY = _value.clientY;
+	          clickX = Math.round(100 * _value.clientX / body.clientWidth);
+	          clickY = Math.round(100 * _value.clientY / body.clientHeight);
 	          body.innerHTML = moveX + ', ' + moveY + ' : ' + clickX + ', ' + clickY;
 	        }
 	        flush(mousemove, mousedown);
@@ -130,7 +130,7 @@
 	}
 	
 	function dragloop(body) {
-	  var buf, mousemove, mouseup, _ref2, channel, value, G, R, _ref3, _channel2, _value2;
+	  var buf, mousemove, mouseup, blur, keydown, _ref2, channel, value, G, R, _ref3;
 	
 	  return _regeneratorRuntime.wrap(function dragloop$(context$1$0) {
 	    while (1) switch (context$1$0.prev = context$1$0.next) {
@@ -138,52 +138,65 @@
 	        buf = { type: 'sliding', size: 1 };
 	        mousemove = new Chan(buf).addEvent(['body', 'mousemove']);
 	        mouseup = new Chan(buf).addEvent(['body', 'mouseup']);
-	        context$1$0.next = 5;
-	        return alts(mousemove, mouseup);
+	        blur = new Chan(buf).addEvent([window, 'blur']);
+	        keydown = new Chan(buf).addEvent([window, 'keydown']);
+	        context$1$0.next = 7;
+	        return alts(mousemove, mouseup, keydown, blur);
 	
-	      case 5:
+	      case 7:
 	        _ref2 = context$1$0.sent;
 	        channel = _ref2.channel;
 	        value = _ref2.value;
 	
 	        if (!(channel === mouseup)) {
-	          context$1$0.next = 10;
+	          context$1$0.next = 12;
 	          break;
 	        }
 	
 	        return context$1$0.abrupt('return', { clientX: value.clientX, clientY: value.clientY });
 	
-	      case 10:
+	      case 12:
 	        if (false) {
-	          context$1$0.next = 26;
+	          context$1$0.next = 31;
 	          break;
 	        }
 	
-	        context$1$0.t0 = _channel2;
-	        context$1$0.next = context$1$0.t0 === mousemove ? 14 : context$1$0.t0 === mouseup ? 18 : 19;
+	        context$1$0.t0 = channel;
+	        context$1$0.next = context$1$0.t0 === mousemove ? 16 : context$1$0.t0 === keydown ? 20 : 23;
 	        break;
 	
-	      case 14:
-	        R = _value2.clientX / body.clientWidth;
-	        G = _value2.clientY / body.clientHeight;
+	      case 16:
+	        R = value.clientX / body.clientWidth;
+	        G = value.clientY / body.clientHeight;
 	        body.style.backgroundColor = 'rgba(' + Math.round(255 * R) + ',' + Math.round(255 * G) + ',0,0.4)';
-	        return context$1$0.abrupt('break', 19);
+	        return context$1$0.abrupt('break', 24);
 	
-	      case 18:
+	      case 20:
+	        if (!(value.keyCode === 27)) {
+	          context$1$0.next = 22;
+	          break;
+	        }
+	
 	        return context$1$0.abrupt('return');
 	
-	      case 19:
-	        context$1$0.next = 21;
-	        return alts(mousemove, mouseup);
+	      case 22:
+	        return context$1$0.abrupt('break', 24);
 	
-	      case 21:
-	        _ref3 = context$1$0.sent;
-	        _channel2 = _ref3.channel;
-	        _value2 = _ref3.value;
-	        context$1$0.next = 10;
-	        break;
+	      case 23:
+	        return context$1$0.abrupt('return');
+	
+	      case 24:
+	        context$1$0.next = 26;
+	        return alts(mousemove, mouseup, keydown, blur);
 	
 	      case 26:
+	        _ref3 = context$1$0.sent;
+	        channel = _ref3.channel;
+	        value = _ref3.value;
+	        context$1$0.next = 12;
+	        break;
+	
+	      case 31:
 	      case 'end':
 	        return context$1$0.stop();
 	    }

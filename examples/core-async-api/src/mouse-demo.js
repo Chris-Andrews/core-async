@@ -29,8 +29,8 @@ function *mainloop () {
       case mousedown:
         value = yield go(dragloop, [body]);
         if (value) {
-          clickX = value.clientX;
-          clickY = value.clientY;
+          clickX = Math.round(100*value.clientX/body.clientWidth);
+          clickY = Math.round(100*value.clientY/body.clientHeight);
           body.innerHTML = (`${moveX}, ${moveY} : ${clickX}, ${clickY}`);
         }
         flush(mousemove, mousedown);
@@ -43,7 +43,9 @@ function *dragloop (body) {
   var buf = {type:'sliding',size:1};
   var mousemove = new Chan(buf).addEvent(['body','mousemove']);
   var mouseup = new Chan(buf).addEvent(['body','mouseup']);
-  let {channel, value} = yield alts(mousemove, mouseup);
+  var blur = new Chan(buf).addEvent([window, 'blur']);
+  var keydown = new Chan(buf).addEvent([window, 'keydown']);
+  var {channel, value} = yield alts(mousemove, mouseup, keydown, blur);
   if (channel===mouseup) {
     return {clientX: value.clientX, clientY: value.clientY};
   }
@@ -55,9 +57,14 @@ function *dragloop (body) {
         G = value.clientY / body.clientHeight;
         body.style.backgroundColor = `rgba(${Math.round(255*R)},${Math.round(255*G)},0,0.4)`;
         break;
-      case mouseup:
+      case keydown:
+        if (value.keyCode === 27) {
+          return;
+        }
+        break;
+      default:
         return;
     }
-    let {channel, value} = yield alts(mousemove, mouseup);
+    ({channel, value} = yield alts(mousemove, mouseup, keydown, blur));
   }
 }
