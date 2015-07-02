@@ -5,6 +5,7 @@ var {
   go,
   alts,
   flush,
+  close,
 } = require('../../../src/api-wrapper.js');
 
 var body = document.querySelector('body');
@@ -59,10 +60,12 @@ function *dragloop (body) {
         break;
       case keydown:
         if (value.keyCode === 27) {
+          close(mousemove, mouseup, blur, keydown);
           return;
         }
         break;
       default:
+        close(mousemove, mouseup, blur, keydown);
         return;
     }
     ({channel, value} = yield alts(mousemove, mouseup, keydown, blur));

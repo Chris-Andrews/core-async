@@ -61,6 +61,7 @@
 	var go = _require.go;
 	var alts = _require.alts;
 	var flush = _require.flush;
+	var close = _require.close;
 	
 	var body = document.querySelector('body');
 	
@@ -157,46 +158,48 @@
 	
 	      case 12:
 	        if (false) {
-	          context$1$0.next = 31;
+	          context$1$0.next = 33;
 	          break;
 	        }
 	
 	        context$1$0.t0 = channel;
-	        context$1$0.next = context$1$0.t0 === mousemove ? 16 : context$1$0.t0 === keydown ? 20 : 23;
+	        context$1$0.next = context$1$0.t0 === mousemove ? 16 : context$1$0.t0 === keydown ? 20 : 24;
 	        break;
 	
 	      case 16:
 	        R = value.clientX / body.clientWidth;
 	        G = value.clientY / body.clientHeight;
 	        body.style.backgroundColor = 'rgba(' + Math.round(255 * R) + ',' + Math.round(255 * G) + ',0,0.4)';
-	        return context$1$0.abrupt('break', 24);
+	        return context$1$0.abrupt('break', 26);
 	
 	      case 20:
 	        if (!(value.keyCode === 27)) {
-	          context$1$0.next = 22;
+	          context$1$0.next = 23;
 	          break;
 	        }
 	
+	        close(mousemove, mouseup, blur, keydown);
 	        return context$1$0.abrupt('return');
-	
-	      case 22:
-	        return context$1$0.abrupt('break', 24);
 	
 	      case 23:
-	        return context$1$0.abrupt('return');
+	        return context$1$0.abrupt('break', 26);
 	
 	      case 24:
-	        context$1$0.next = 26;
-	        return alts(mousemove, mouseup, keydown, blur);
+	        close(mousemove, mouseup, blur, keydown);
+	        return context$1$0.abrupt('return');
 	
 	      case 26:
+	        context$1$0.next = 28;
+	        return alts(mousemove, mouseup, keydown, blur);
+	
+	      case 28:
 	        _ref3 = context$1$0.sent;
 	        channel = _ref3.channel;
 	        value = _ref3.value;
 	        context$1$0.next = 12;
 	        break;
 	
-	      case 31:
+	      case 33:
 	      case 'end':
 	        return context$1$0.stop();
 	    }
