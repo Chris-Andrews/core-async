@@ -1,12 +1,9 @@
 module.exports = {
-  // entry: "./examples/core-async-api/scratch.js",
   entry: {
-    'mouse-demo': './src/mouse-demo.js',
+    "./src/api-wrapper"
   },
   output: {
-    path: __dirname + '/build',
-    publicPath: "/",
-    filename: '[name].bundle.js',
+    filename: "./build/core-async.js"
   },
   module: {
   loaders: [
