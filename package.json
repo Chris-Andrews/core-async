@@ -29,7 +29,9 @@
     "email": "christopher.m.andrews@gmail.com",
     "url": "https://github.com/chris-andrews/core-async/issues"
   },
-  "dependencies": {},
+  "dependencies": {
+    "transducers.js": "^0.3.2"
+  },
   "devDependencies": {
     "babel": "^5.6.4",
     "babel-loader": "^5.2.2",
